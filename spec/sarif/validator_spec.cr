@@ -27,7 +27,7 @@ describe Sarif::Validator do
     )
     result = Sarif::Validator.new.validate(log)
     result.valid?.should be_false
-    result.errors.any? { |e| e.message.includes?("name must not be empty") }.should be_true
+    result.errors.any? { |e| e.message.try(&.includes?("name must not be empty")) }.should be_true
   end
 
   it "detects invalid version" do
@@ -41,7 +41,7 @@ describe Sarif::Validator do
     )
     result = Sarif::Validator.new.validate(log)
     result.valid?.should be_false
-    result.errors.any? { |e| e.message.includes?("Unsupported SARIF version") }.should be_true
+    result.errors.any? { |e| e.message.try(&.includes?("Unsupported SARIF version")) }.should be_true
   end
 
   it "detects result message without text or id" do
@@ -57,7 +57,7 @@ describe Sarif::Validator do
     )
     result = Sarif::Validator.new.validate(log)
     result.valid?.should be_false
-    result.errors.any? { |e| e.message.includes?("text or id") }.should be_true
+    result.errors.any? { |e| e.message.try(&.includes?("text or id")) }.should be_true
   end
 
   it "detects invalid ruleIndex" do
@@ -73,7 +73,7 @@ describe Sarif::Validator do
     )
     result = Sarif::Validator.new.validate(log)
     result.valid?.should be_false
-    result.errors.any? { |e| e.message.includes?("Invalid ruleIndex") }.should be_true
+    result.errors.any? { |e| e.message.try(&.includes?("Invalid ruleIndex")) }.should be_true
   end
 
   it "detects ruleId mismatch with ruleIndex" do
@@ -97,7 +97,7 @@ describe Sarif::Validator do
     )
     result = Sarif::Validator.new.validate(log)
     result.valid?.should be_false
-    result.errors.any? { |e| e.message.includes?("does not match") }.should be_true
+    result.errors.any? { |e| e.message.try(&.includes?("does not match")) }.should be_true
   end
 
   it "provides error path information" do

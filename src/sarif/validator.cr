@@ -1,17 +1,29 @@
 module Sarif
-  class ValidationError
-    getter message : String
+  class Error < Exception
+  end
+
+  class ValidationError < Error
     getter path : String
 
-    def initialize(@message : String, @path : String = "")
+    def initialize(message : String, @path : String = "")
+      super(message)
     end
 
     def to_s(io : IO) : Nil
       if @path.empty?
-        io << @message
+        io << message
       else
-        io << @path << ": " << @message
+        io << @path << ": " << message
       end
+    end
+  end
+
+  class ParseError < Error
+    getter validation_errors : Array(ValidationError)
+
+    def initialize(@validation_errors : Array(ValidationError))
+      messages = @validation_errors.map(&.to_s).join("; ")
+      super("SARIF validation failed: #{messages}")
     end
   end
 

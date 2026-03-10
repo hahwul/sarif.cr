@@ -48,7 +48,7 @@ describe Sarif::Location do
     loc = Sarif::Location.new(
       logical_locations: [
         Sarif::LogicalLocation.new(name: "MyClass", kind: "type",
-                                    fully_qualified_name: "MyModule::MyClass"),
+          fully_qualified_name: "MyModule::MyClass"),
       ]
     )
     json = loc.to_json

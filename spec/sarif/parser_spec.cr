@@ -88,9 +88,39 @@ describe "Sarif.parse!" do
         "tool": { "driver": { "name": "" } }
       }]
     })
-    expect_raises(Exception, /validation failed/) do
+    expect_raises(Sarif::ParseError, /validation failed/) do
       Sarif.parse!(json)
     end
+  end
+
+  it "provides access to validation errors via ParseError" do
+    json = %({
+      "version": "2.1.0",
+      "runs": [{
+        "tool": { "driver": { "name": "" } }
+      }]
+    })
+    begin
+      Sarif.parse!(json)
+      fail "Expected ParseError"
+    rescue ex : Sarif::ParseError
+      ex.validation_errors.should_not be_empty
+      ex.validation_errors[0].path.should eq("$.runs[0].tool.driver.name")
+    end
+  end
+end
+
+describe "Sarif.parse with IO" do
+  it "parses SARIF from IO" do
+    json = %({
+      "version": "2.1.0",
+      "runs": [{
+        "tool": { "driver": { "name": "IOTool" } }
+      }]
+    })
+    io = IO::Memory.new(json)
+    log = Sarif.parse(io)
+    log.runs[0].tool.driver.name.should eq("IOTool")
   end
 end
 

@@ -66,14 +66,14 @@ module Sarif
   })
 
   sarif_enum(SuppressionKind, {
-    InSource  => "inSource",
-    External  => "external",
+    InSource => "inSource",
+    External => "external",
   })
 
   sarif_enum(SuppressionStatus, {
-    Accepted        => "accepted",
-    UnderReview      => "underReview",
-    Rejected        => "rejected",
+    Accepted    => "accepted",
+    UnderReview => "underReview",
+    Rejected    => "rejected",
   })
 
   sarif_enum(Importance, {
@@ -83,33 +83,33 @@ module Sarif
   })
 
   sarif_enum(ArtifactRole, {
-    AnalysisTarget     => "analysisTarget",
-    Attachment         => "attachment",
-    ResponseFile       => "responseFile",
-    ResultFile         => "resultFile",
-    StandardStream     => "standardStream",
-    TracedFile         => "tracedFile",
-    Unmodified         => "unmodified",
-    Modified           => "modified",
-    Added              => "added",
-    Deleted            => "deleted",
-    Renamed            => "renamed",
-    Uncontrolled       => "uncontrolled",
-    Driver             => "driver",
-    Extension          => "extension",
-    Translation        => "translation",
-    Taxonomy           => "taxonomy",
-    Policy             => "policy",
-    ReferencedOnCommandLine => "referencedOnCommandLine",
-    MemoryContents     => "memoryContents",
-    Directory          => "directory",
+    AnalysisTarget             => "analysisTarget",
+    Attachment                 => "attachment",
+    ResponseFile               => "responseFile",
+    ResultFile                 => "resultFile",
+    StandardStream             => "standardStream",
+    TracedFile                 => "tracedFile",
+    Unmodified                 => "unmodified",
+    Modified                   => "modified",
+    Added                      => "added",
+    Deleted                    => "deleted",
+    Renamed                    => "renamed",
+    Uncontrolled               => "uncontrolled",
+    Driver                     => "driver",
+    Extension                  => "extension",
+    Translation                => "translation",
+    Taxonomy                   => "taxonomy",
+    Policy                     => "policy",
+    ReferencedOnCommandLine    => "referencedOnCommandLine",
+    MemoryContents             => "memoryContents",
+    Directory                  => "directory",
     UserSpecifiedConfiguration => "userSpecifiedConfiguration",
     ToolSpecifiedConfiguration => "toolSpecifiedConfiguration",
-    DebugOutputFile    => "debugOutputFile",
+    DebugOutputFile            => "debugOutputFile",
   })
 
   sarif_enum(ColumnKind, {
-    Utf16CodeUnits   => "utf16CodeUnits",
+    Utf16CodeUnits    => "utf16CodeUnits",
     UnicodeCodePoints => "unicodeCodePoints",
   })
 

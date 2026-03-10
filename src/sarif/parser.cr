@@ -3,23 +3,31 @@ module Sarif
     SarifLog.from_json(json)
   end
 
+  def self.parse(io : IO) : SarifLog
+    SarifLog.from_json(io)
+  end
+
   def self.from_file(path : String) : SarifLog
-    json = File.read(path)
-    parse(json)
+    File.open(path) { |io| parse(io) }
   end
 
   def self.parse!(json : String) : SarifLog
     log = parse(json)
-    result = Validator.new.validate(log)
-    unless result.valid?
-      messages = result.errors.map(&.to_s).join("; ")
-      raise "SARIF validation failed: #{messages}"
-    end
-    log
+    validate!(log)
+  end
+
+  def self.parse!(io : IO) : SarifLog
+    log = parse(io)
+    validate!(log)
   end
 
   def self.from_file!(path : String) : SarifLog
-    json = File.read(path)
-    parse!(json)
+    File.open(path) { |io| parse!(io) }
+  end
+
+  private def self.validate!(log : SarifLog) : SarifLog
+    result = Validator.new.validate(log)
+    raise ParseError.new(result.errors) unless result.valid?
+    log
   end
 end

@@ -198,9 +198,9 @@ describe "SARIF Round-Trip" do
         r.rule("CL001", name: "UnusedVar", short_description: "Unused variable detected")
         r.rule("CL002", name: "ShadowVar", short_description: "Variable shadows outer scope")
         r.result("Variable 'x' is never used", rule_id: "CL001",
-                 level: Sarif::Level::Warning, uri: "src/app.cr", start_line: 15)
+          level: Sarif::Level::Warning, uri: "src/app.cr", start_line: 15)
         r.result("Variable 'i' shadows outer 'i'", rule_id: "CL002",
-                 level: Sarif::Level::Note, uri: "src/loop.cr", start_line: 22, start_column: 5)
+          level: Sarif::Level::Note, uri: "src/loop.cr", start_line: 22, start_column: 5)
         r.artifact("src/app.cr", mime_type: "text/x-crystal")
         r.artifact("src/loop.cr", mime_type: "text/x-crystal")
         r.invocation(true, "crystal-lint src/")

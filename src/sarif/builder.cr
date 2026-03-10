@@ -20,6 +20,30 @@ module Sarif
     end
   end
 
+  # :nodoc:
+  protected def self.build_location(uri : String? = nil, start_line : Int32? = nil,
+                                    start_column : Int32? = nil, end_line : Int32? = nil,
+                                    end_column : Int32? = nil) : Location
+    region = if start_line
+               Region.new(start_line: start_line, start_column: start_column,
+                 end_line: end_line, end_column: end_column)
+             end
+    artifact_loc = uri ? ArtifactLocation.new(uri: uri) : nil
+    physical = PhysicalLocation.new(artifact_location: artifact_loc, region: region)
+    Location.new(physical_location: physical)
+  end
+
+  # :nodoc:
+  protected def self.find_rule_index(rules : Array(ReportingDescriptor), rule_id : String?) : Int32?
+    return nil unless rule_id
+    rules.index { |r| r.id == rule_id }
+  end
+
+  # :nodoc:
+  protected def self.nil_if_empty(arr : Array(T)) : Array(T)? forall T
+    arr.empty? ? nil : arr
+  end
+
   class RunBuilder
     @name : String
     @version : String?
@@ -57,27 +81,14 @@ module Sarif
                start_column : Int32? = nil, end_line : Int32? = nil,
                end_column : Int32? = nil) : self
       message = Message.new(text: text)
-      locations = nil
-      if uri || start_line
-        region = nil
-        if start_line
-          region = Region.new(start_line: start_line, start_column: start_column,
-                              end_line: end_line, end_column: end_column)
-        end
-        artifact_loc = uri ? ArtifactLocation.new(uri: uri) : nil
-        physical = PhysicalLocation.new(artifact_location: artifact_loc, region: region)
-        locations = [Location.new(physical_location: physical)]
-      end
-
-      rule_index = nil
-      if rule_id
-        idx = @rules.index { |r| r.id == rule_id }
-        rule_index = idx.as(Int32) if idx
-      end
+      locations = if uri || start_line
+                    [Sarif.build_location(uri: uri, start_line: start_line,
+                      start_column: start_column, end_line: end_line, end_column: end_column)]
+                  end
 
       @results << Result.new(
         message: message, rule_id: rule_id, level: level, kind: kind,
-        locations: locations, rule_index: rule_index
+        locations: locations, rule_index: Sarif.find_rule_index(@rules, rule_id)
       )
       self
     end
@@ -109,14 +120,14 @@ module Sarif
     def build : Run
       driver = ToolComponent.new(
         name: @name, version: @version, information_uri: @information_uri,
-        rules: @rules.empty? ? nil : @rules
+        rules: Sarif.nil_if_empty(@rules)
       )
       tool = Tool.new(driver: driver)
       Run.new(
         tool: tool,
-        results: @results.empty? ? nil : @results,
-        artifacts: @artifacts.empty? ? nil : @artifacts,
-        invocations: @invocations.empty? ? nil : @invocations
+        results: Sarif.nil_if_empty(@results),
+        artifacts: Sarif.nil_if_empty(@artifacts),
+        invocations: Sarif.nil_if_empty(@invocations)
       )
     end
   end
@@ -153,14 +164,8 @@ module Sarif
     def location(uri : String? = nil, start_line : Int32? = nil,
                  start_column : Int32? = nil, end_line : Int32? = nil,
                  end_column : Int32? = nil) : self
-      region = nil
-      if start_line
-        region = Region.new(start_line: start_line, start_column: start_column,
-                            end_line: end_line, end_column: end_column)
-      end
-      artifact_loc = uri ? ArtifactLocation.new(uri: uri) : nil
-      physical = PhysicalLocation.new(artifact_location: artifact_loc, region: region)
-      @locations << Location.new(physical_location: physical)
+      @locations << Sarif.build_location(uri: uri, start_line: start_line,
+        start_column: start_column, end_line: end_line, end_column: end_column)
       self
     end
 
@@ -175,32 +180,26 @@ module Sarif
     end
 
     def fingerprint(key : String, value : String) : self
-      @fingerprints ||= {} of String => String
-      @fingerprints.not_nil![key] = value
+      fp = @fingerprints ||= {} of String => String
+      fp[key] = value
       self
     end
 
     def partial_fingerprint(key : String, value : String) : self
-      @partial_fingerprints ||= {} of String => String
-      @partial_fingerprints.not_nil![key] = value
+      pfp = @partial_fingerprints ||= {} of String => String
+      pfp[key] = value
       self
     end
 
     def build(rules : Array(ReportingDescriptor)) : Result
-      rule_index = nil
-      if rid = @rule_id
-        idx = rules.index { |r| r.id == rid }
-        rule_index = idx.as(Int32) if idx
-      end
-
       Result.new(
         message: Message.new(text: @text, markdown: @markdown),
         rule_id: @rule_id, level: @level, kind: @kind,
-        rule_index: rule_index,
-        locations: @locations.empty? ? nil : @locations,
-        related_locations: @related_locations.empty? ? nil : @related_locations,
-        code_flows: @code_flows.empty? ? nil : @code_flows,
-        fixes: @fixes.empty? ? nil : @fixes,
+        rule_index: Sarif.find_rule_index(rules, @rule_id),
+        locations: Sarif.nil_if_empty(@locations),
+        related_locations: Sarif.nil_if_empty(@related_locations),
+        code_flows: Sarif.nil_if_empty(@code_flows),
+        fixes: Sarif.nil_if_empty(@fixes),
         fingerprints: @fingerprints,
         partial_fingerprints: @partial_fingerprints
       )

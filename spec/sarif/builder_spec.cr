@@ -21,7 +21,7 @@ describe Sarif::Builder do
     log = Sarif::Builder.build do |b|
       b.run("Linter", "1.0") do |r|
         r.result("Unused variable", rule_id: "LINT001",
-                 level: Sarif::Level::Warning, uri: "src/main.cr", start_line: 10)
+          level: Sarif::Level::Warning, uri: "src/main.cr", start_line: 10)
       end
     end
     results = log.runs[0].results.not_nil!
@@ -113,7 +113,7 @@ describe Sarif::Builder do
     log = Sarif::Builder.build do |b|
       b.run("MyLinter", "1.0.0") do |r|
         r.result("Unused variable", rule_id: "LINT001",
-                 level: Sarif::Level::Warning, uri: "src/main.cr", start_line: 10)
+          level: Sarif::Level::Warning, uri: "src/main.cr", start_line: 10)
       end
     end
     json = log.to_pretty_json
