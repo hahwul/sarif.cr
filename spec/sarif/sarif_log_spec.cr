@@ -152,6 +152,144 @@ describe Sarif::SarifLog do
     restored.runs[1].tool.driver.name.should eq("Tool2")
   end
 
+  describe "#find_results" do
+    it "filters across runs with multiple criteria" do
+      log = Sarif::SarifLog.new(
+        runs: [
+          Sarif::Run.new(
+            tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool1")),
+            results: [
+              Sarif::Result.new(message: Sarif::Message.new(text: "A"), rule_id: "R1", level: Sarif::Level::Error),
+              Sarif::Result.new(message: Sarif::Message.new(text: "B"), rule_id: "R2", level: Sarif::Level::Warning),
+            ]
+          ),
+          Sarif::Run.new(
+            tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool2")),
+            results: [
+              Sarif::Result.new(message: Sarif::Message.new(text: "C"), rule_id: "R1", level: Sarif::Level::Error),
+            ]
+          ),
+        ]
+      )
+      log.find_results(rule_id: "R1", level: Sarif::Level::Error).size.should eq(2)
+      log.find_results(rule_id: "R2").size.should eq(1)
+      log.find_results(level: Sarif::Level::Warning).size.should eq(1)
+    end
+  end
+
+  describe "#find_locations_in_file" do
+    it "finds locations by file URI" do
+      log = Sarif::SarifLog.new(
+        runs: [
+          Sarif::Run.new(
+            tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+            results: [
+              Sarif::Result.new(
+                message: Sarif::Message.new(text: "A"),
+                locations: [
+                  Sarif::Location.new(
+                    physical_location: Sarif::PhysicalLocation.new(
+                      artifact_location: Sarif::ArtifactLocation.new(uri: "src/main.cr"),
+                      region: Sarif::Region.new(start_line: 10)
+                    )
+                  ),
+                ]
+              ),
+              Sarif::Result.new(
+                message: Sarif::Message.new(text: "B"),
+                locations: [
+                  Sarif::Location.new(
+                    physical_location: Sarif::PhysicalLocation.new(
+                      artifact_location: Sarif::ArtifactLocation.new(uri: "src/other.cr"),
+                      region: Sarif::Region.new(start_line: 5)
+                    )
+                  ),
+                ]
+              ),
+              Sarif::Result.new(
+                message: Sarif::Message.new(text: "C"),
+                locations: [
+                  Sarif::Location.new(
+                    physical_location: Sarif::PhysicalLocation.new(
+                      artifact_location: Sarif::ArtifactLocation.new(uri: "src/main.cr"),
+                      region: Sarif::Region.new(start_line: 20)
+                    )
+                  ),
+                ]
+              ),
+            ]
+          ),
+        ]
+      )
+      locs = log.find_locations_in_file("src/main.cr")
+      locs.size.should eq(2)
+      locs[0].physical_location.not_nil!.region.not_nil!.start_line.should eq(10)
+      locs[1].physical_location.not_nil!.region.not_nil!.start_line.should eq(20)
+    end
+
+    it "returns empty for non-matching file" do
+      log = Sarif::SarifLog.new(
+        runs: [
+          Sarif::Run.new(
+            tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+            results: [
+              Sarif::Result.new(message: Sarif::Message.new(text: "A"),
+                locations: [
+                  Sarif::Location.new(
+                    physical_location: Sarif::PhysicalLocation.new(
+                      artifact_location: Sarif::ArtifactLocation.new(uri: "src/main.cr")
+                    )
+                  ),
+                ]
+              ),
+            ]
+          ),
+        ]
+      )
+      log.find_locations_in_file("src/nonexistent.cr").should be_empty
+    end
+  end
+
+  describe "#result_counts_by_level" do
+    it "counts results by level across runs" do
+      log = Sarif::SarifLog.new(
+        runs: [
+          Sarif::Run.new(
+            tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+            results: [
+              Sarif::Result.new(message: Sarif::Message.new(text: "A"), level: Sarif::Level::Error),
+              Sarif::Result.new(message: Sarif::Message.new(text: "B"), level: Sarif::Level::Warning),
+              Sarif::Result.new(message: Sarif::Message.new(text: "C"), level: Sarif::Level::Error),
+            ]
+          ),
+        ]
+      )
+      counts = log.result_counts_by_level
+      counts[Sarif::Level::Error].should eq(2)
+      counts[Sarif::Level::Warning].should eq(1)
+    end
+  end
+
+  describe "#result_counts_by_rule_id" do
+    it "counts results by rule_id across runs" do
+      log = Sarif::SarifLog.new(
+        runs: [
+          Sarif::Run.new(
+            tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+            results: [
+              Sarif::Result.new(message: Sarif::Message.new(text: "A"), rule_id: "R1"),
+              Sarif::Result.new(message: Sarif::Message.new(text: "B"), rule_id: "R2"),
+              Sarif::Result.new(message: Sarif::Message.new(text: "C"), rule_id: "R1"),
+            ]
+          ),
+        ]
+      )
+      counts = log.result_counts_by_rule_id
+      counts["R1"].should eq(2)
+      counts["R2"].should eq(1)
+    end
+  end
+
   describe "#valid?" do
     it "returns true for valid log" do
       log = Sarif::SarifLog.new(

@@ -154,6 +154,71 @@ describe Sarif::Run do
     restored.column_kind.should eq(Sarif::ColumnKind::UnicodeCodePoints)
   end
 
+  describe "#find_results" do
+    it "filters by multiple criteria" do
+      run = Sarif::Run.new(
+        tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+        results: [
+          Sarif::Result.new(message: Sarif::Message.new(text: "A"), rule_id: "R1", level: Sarif::Level::Error),
+          Sarif::Result.new(message: Sarif::Message.new(text: "B"), rule_id: "R1", level: Sarif::Level::Warning),
+          Sarif::Result.new(message: Sarif::Message.new(text: "C"), rule_id: "R2", level: Sarif::Level::Error),
+        ]
+      )
+      run.find_results(rule_id: "R1", level: Sarif::Level::Error).size.should eq(1)
+      run.find_results(rule_id: "R1").size.should eq(2)
+      run.find_results(level: Sarif::Level::Error).size.should eq(2)
+      run.find_results.size.should eq(3)
+    end
+
+    it "filters by kind" do
+      run = Sarif::Run.new(
+        tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+        results: [
+          Sarif::Result.new(message: Sarif::Message.new(text: "A"), kind: Sarif::ResultKind::Pass),
+          Sarif::Result.new(message: Sarif::Message.new(text: "B"), kind: Sarif::ResultKind::Fail),
+        ]
+      )
+      run.find_results(kind: Sarif::ResultKind::Pass).size.should eq(1)
+    end
+
+    it "returns empty when results is nil" do
+      run = Sarif::Run.new(tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")))
+      run.find_results(rule_id: "R1").should be_empty
+    end
+  end
+
+  describe "#result_counts_by_level" do
+    it "counts results by level" do
+      run = Sarif::Run.new(
+        tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+        results: [
+          Sarif::Result.new(message: Sarif::Message.new(text: "A"), level: Sarif::Level::Error),
+          Sarif::Result.new(message: Sarif::Message.new(text: "B"), level: Sarif::Level::Warning),
+          Sarif::Result.new(message: Sarif::Message.new(text: "C"), level: Sarif::Level::Error),
+        ]
+      )
+      counts = run.result_counts_by_level
+      counts[Sarif::Level::Error].should eq(2)
+      counts[Sarif::Level::Warning].should eq(1)
+    end
+  end
+
+  describe "#result_counts_by_rule_id" do
+    it "counts results by rule_id" do
+      run = Sarif::Run.new(
+        tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+        results: [
+          Sarif::Result.new(message: Sarif::Message.new(text: "A"), rule_id: "R1"),
+          Sarif::Result.new(message: Sarif::Message.new(text: "B"), rule_id: "R2"),
+          Sarif::Result.new(message: Sarif::Message.new(text: "C"), rule_id: "R1"),
+        ]
+      )
+      counts = run.result_counts_by_rule_id
+      counts["R1"].should eq(2)
+      counts["R2"].should eq(1)
+    end
+  end
+
   describe "#valid?" do
     it "returns true for valid run" do
       run = Sarif::Run.new(
