@@ -103,5 +103,19 @@ module Sarif
                    @original_uri_base_ids : Hash(String, ArtifactLocation)? = nil,
                    @properties : PropertyBag? = nil)
     end
+
+    def results_by_rule_id(rule_id : String) : Array(Result)
+      return [] of Result unless rs = results
+      rs.select { |r| r.rule_id == rule_id }
+    end
+
+    def results_by_level(level : Level) : Array(Result)
+      return [] of Result unless rs = results
+      rs.select { |r| r.effective_level == level }
+    end
+
+    def rule_by_id(rule_id : String) : ReportingDescriptor?
+      tool.driver.rules.try &.find { |r| r.id == rule_id }
+    end
   end
 end

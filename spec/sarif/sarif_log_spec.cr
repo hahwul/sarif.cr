@@ -82,6 +82,62 @@ describe Sarif::SarifLog do
     pretty.should contain("\n")
   end
 
+  it "returns all results across runs" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool1")),
+          results: [
+            Sarif::Result.new(message: Sarif::Message.new(text: "A"), rule_id: "R1", level: Sarif::Level::Error),
+            Sarif::Result.new(message: Sarif::Message.new(text: "B"), rule_id: "R2", level: Sarif::Level::Warning),
+          ]
+        ),
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool2")),
+          results: [
+            Sarif::Result.new(message: Sarif::Message.new(text: "C"), rule_id: "R1", level: Sarif::Level::Error),
+          ]
+        ),
+      ]
+    )
+    log.all_results.size.should eq(3)
+  end
+
+  it "filters results by level" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+          results: [
+            Sarif::Result.new(message: Sarif::Message.new(text: "A"), level: Sarif::Level::Error),
+            Sarif::Result.new(message: Sarif::Message.new(text: "B"), level: Sarif::Level::Warning),
+            Sarif::Result.new(message: Sarif::Message.new(text: "C"), level: Sarif::Level::Error),
+          ]
+        ),
+      ]
+    )
+    log.results_by_level(Sarif::Level::Error).size.should eq(2)
+    log.results_by_level(Sarif::Level::Warning).size.should eq(1)
+  end
+
+  it "filters results by rule_id" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+          results: [
+            Sarif::Result.new(message: Sarif::Message.new(text: "A"), rule_id: "R1"),
+            Sarif::Result.new(message: Sarif::Message.new(text: "B"), rule_id: "R2"),
+            Sarif::Result.new(message: Sarif::Message.new(text: "C"), rule_id: "R1"),
+          ]
+        ),
+      ]
+    )
+    log.results_by_rule_id("R1").size.should eq(2)
+    log.results_by_rule_id("R2").size.should eq(1)
+    log.results_by_rule_id("R999").size.should eq(0)
+  end
+
   it "supports multiple runs" do
     log = Sarif::SarifLog.new(
       runs: [

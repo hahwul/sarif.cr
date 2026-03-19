@@ -82,6 +82,62 @@ describe Sarif::Run do
     parsed["versionControlProvenance"][0]["branch"].as_s.should eq("main")
   end
 
+  it "returns empty results from helpers when results is nil" do
+    run = Sarif::Run.new(
+      tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool"))
+    )
+    run.results_by_rule_id("R1").should be_empty
+    run.results_by_level(Sarif::Level::Error).should be_empty
+  end
+
+  it "finds results by rule_id" do
+    run = Sarif::Run.new(
+      tool: Sarif::Tool.new(
+        driver: Sarif::ToolComponent.new(name: "Tool",
+          rules: [
+            Sarif::ReportingDescriptor.new(id: "R1"),
+            Sarif::ReportingDescriptor.new(id: "R2"),
+          ]
+        )
+      ),
+      results: [
+        Sarif::Result.new(message: Sarif::Message.new(text: "A"), rule_id: "R1"),
+        Sarif::Result.new(message: Sarif::Message.new(text: "B"), rule_id: "R2"),
+        Sarif::Result.new(message: Sarif::Message.new(text: "C"), rule_id: "R1"),
+      ]
+    )
+    run.results_by_rule_id("R1").size.should eq(2)
+    run.results_by_rule_id("R2").size.should eq(1)
+  end
+
+  it "finds results by level" do
+    run = Sarif::Run.new(
+      tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+      results: [
+        Sarif::Result.new(message: Sarif::Message.new(text: "A"), level: Sarif::Level::Error),
+        Sarif::Result.new(message: Sarif::Message.new(text: "B"), level: Sarif::Level::Warning),
+      ]
+    )
+    run.results_by_level(Sarif::Level::Error).size.should eq(1)
+    run.results_by_level(Sarif::Level::Warning).size.should eq(1)
+  end
+
+  it "finds rule by id" do
+    run = Sarif::Run.new(
+      tool: Sarif::Tool.new(
+        driver: Sarif::ToolComponent.new(name: "Tool",
+          rules: [
+            Sarif::ReportingDescriptor.new(id: "R1", name: "Rule1"),
+            Sarif::ReportingDescriptor.new(id: "R2", name: "Rule2"),
+          ]
+        )
+      )
+    )
+    run.rule_by_id("R1").not_nil!.name.should eq("Rule1")
+    run.rule_by_id("R2").not_nil!.name.should eq("Rule2")
+    run.rule_by_id("R999").should be_nil
+  end
+
   it "round-trips through JSON" do
     run = Sarif::Run.new(
       tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "MyTool", version: "1.0")),
