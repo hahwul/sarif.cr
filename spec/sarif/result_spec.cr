@@ -94,4 +94,31 @@ describe Sarif::Result do
     parsed["suppressions"][0]["kind"].as_s.should eq("inSource")
     parsed["suppressions"][0]["justification"].as_s.should eq("reviewed")
   end
+
+  describe "#valid?" do
+    it "returns true for valid result" do
+      result = Sarif::Result.new(message: Sarif::Message.new(text: "issue"))
+      result.valid?.should be_true
+    end
+
+    it "returns false when message has no text or id" do
+      result = Sarif::Result.new(message: Sarif::Message.new)
+      result.valid?.should be_false
+    end
+
+    it "returns false when rank is out of range" do
+      result = Sarif::Result.new(message: Sarif::Message.new(text: "issue"), rank: 101.0)
+      result.valid?.should be_false
+    end
+
+    it "returns false when occurrenceCount is less than 1" do
+      result = Sarif::Result.new(message: Sarif::Message.new(text: "issue"), occurrence_count: 0)
+      result.valid?.should be_false
+    end
+
+    it "returns true with valid rank and occurrenceCount" do
+      result = Sarif::Result.new(message: Sarif::Message.new(text: "issue"), rank: 50.0, occurrence_count: 3)
+      result.valid?.should be_true
+    end
+  end
 end

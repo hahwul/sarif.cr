@@ -1,6 +1,11 @@
 require "json"
 
 module Sarif
+  # A single invocation of a single analysis tool on a single artifact or set of artifacts.
+  #
+  # A `Run` contains the tool description, results, artifacts analyzed, and invocation details.
+  #
+  # See: [SARIF 2.1.0 §3.14](https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html#_Toc34317484)
   class Run
     include JSON::Serializable
 
@@ -114,8 +119,48 @@ module Sarif
       rs.select { |r| r.effective_level == level }
     end
 
+    def find_results(rule_id : String? = nil, level : Level? = nil,
+                     kind : ResultKind? = nil) : Array(Result)
+      return [] of Result unless rs = results
+      rs.select do |r|
+        next false if rule_id && r.rule_id != rule_id
+        next false if level && r.effective_level != level
+        next false if kind && r.effective_kind != kind
+        true
+      end
+    end
+
+    def result_counts_by_level : Hash(Level, Int32)
+      counts = {} of Level => Int32
+      return counts unless rs = results
+      rs.each do |r|
+        lvl = r.effective_level
+        counts[lvl] = (counts[lvl]? || 0) + 1
+      end
+      counts
+    end
+
+    def result_counts_by_rule_id : Hash(String, Int32)
+      counts = {} of String => Int32
+      return counts unless rs = results
+      rs.each do |r|
+        if rid = r.rule_id
+          counts[rid] = (counts[rid]? || 0) + 1
+        end
+      end
+      counts
+    end
+
     def rule_by_id(rule_id : String) : ReportingDescriptor?
       tool.driver.rules.try &.find { |r| r.id == rule_id }
+    end
+
+    def valid? : Bool
+      return false if tool.driver.name.empty?
+      results.try &.each do |result|
+        return false unless result.valid?
+      end
+      true
     end
   end
 end

@@ -1,6 +1,12 @@
 require "json"
 
 module Sarif
+  # A single result (finding) from a static analysis tool.
+  #
+  # Each result must have a `message` with either text or an id.
+  # Optionally references a rule via `rule_id` and/or `rule_index`.
+  #
+  # See: [SARIF 2.1.0 §3.27](https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html#_Toc34317638)
   class Result
     include JSON::Serializable
 
@@ -112,6 +118,17 @@ module Sarif
 
     def effective_kind : ResultKind
       kind || ResultKind::Fail
+    end
+
+    def valid? : Bool
+      return false unless message.valid?
+      if (r = rank) && (r < 0.0 || r > 100.0)
+        return false
+      end
+      if (c = occurrence_count) && c < 1
+        return false
+      end
+      true
     end
   end
 end

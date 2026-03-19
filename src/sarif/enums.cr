@@ -1,4 +1,6 @@
 module Sarif
+  # Macro for defining SARIF enums with bidirectional JSON serialization.
+  # Maps Crystal enum values to their camelCase SARIF string representations.
   macro sarif_enum(name, mapping)
     enum {{name}}
       {% for key, _value in mapping %}
@@ -42,6 +44,7 @@ module Sarif
     end
   end
 
+  # Severity level of a result. See: SARIF 2.1.0 §3.27.10
   sarif_enum(Level, {
     None    => "none",
     Note    => "note",

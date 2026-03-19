@@ -1,6 +1,12 @@
 require "json"
 
 module Sarif
+  # A component of an analysis tool (driver or extension).
+  #
+  # The `driver` is the primary tool; `extensions` are plugins or add-ons.
+  # Contains the tool's rules, notifications, and metadata.
+  #
+  # See: [SARIF 2.1.0 §3.19](https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html#_Toc34317533)
   class ToolComponent
     include JSON::Serializable
 

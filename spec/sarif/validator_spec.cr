@@ -236,4 +236,281 @@ describe Sarif::Validator do
     result = Sarif::Validator.new.validate(log)
     result.errors[0].path.should eq("$.runs[0].tool.driver.name")
   end
+
+  it "detects invalid GUID format" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+          results: [
+            Sarif::Result.new(
+              message: Sarif::Message.new(text: "issue"),
+              guid: "not-a-uuid"
+            ),
+          ]
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_false
+    result.errors.any? { |e| e.message.try(&.includes?("Invalid GUID format")) }.should be_true
+  end
+
+  it "accepts valid GUID format" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+          results: [
+            Sarif::Result.new(
+              message: Sarif::Message.new(text: "issue"),
+              guid: "550e8400-e29b-41d4-a716-446655440000"
+            ),
+          ]
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_true
+  end
+
+  it "detects invalid timestamp format" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+          invocations: [
+            Sarif::Invocation.new(
+              execution_successful: true,
+              start_time_utc: "2024-01-01 12:00:00"
+            ),
+          ]
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_false
+    result.errors.any? { |e| e.message.try(&.includes?("Invalid timestamp format")) }.should be_true
+  end
+
+  it "accepts valid RFC 3339 timestamp" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+          invocations: [
+            Sarif::Invocation.new(
+              execution_successful: true,
+              start_time_utc: "2024-01-01T12:00:00Z"
+            ),
+          ]
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_true
+  end
+
+  it "detects rank out of range" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+          results: [
+            Sarif::Result.new(
+              message: Sarif::Message.new(text: "issue"),
+              rank: 101.0
+            ),
+          ]
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_false
+    result.errors.any? { |e| e.message.try(&.includes?("rank must be between")) }.should be_true
+  end
+
+  it "detects negative rank" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+          results: [
+            Sarif::Result.new(
+              message: Sarif::Message.new(text: "issue"),
+              rank: -1.0
+            ),
+          ]
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_false
+  end
+
+  it "detects invalid occurrenceCount" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+          results: [
+            Sarif::Result.new(
+              message: Sarif::Message.new(text: "issue"),
+              occurrence_count: 0
+            ),
+          ]
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_false
+    result.errors.any? { |e| e.message.try(&.includes?("occurrenceCount must be >= 1")) }.should be_true
+  end
+
+  it "detects invalid URI format" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(
+            driver: Sarif::ToolComponent.new(
+              name: "Tool",
+              download_uri: "not a uri"
+            )
+          ),
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_false
+    result.errors.any? { |e| e.message.try(&.includes?("Invalid URI format")) }.should be_true
+  end
+
+  it "accepts valid URI format" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(
+            driver: Sarif::ToolComponent.new(
+              name: "Tool",
+              download_uri: "https://example.com/tool"
+            )
+          ),
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_true
+  end
+
+  it "detects empty reporting descriptor id" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(
+            driver: Sarif::ToolComponent.new(
+              name: "Tool",
+              rules: [Sarif::ReportingDescriptor.new(id: "")]
+            )
+          ),
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_false
+    result.errors.any? { |e| e.message.try(&.includes?("id must not be empty")) }.should be_true
+  end
+
+  it "detects endTimeUtc before startTimeUtc" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+          invocations: [
+            Sarif::Invocation.new(
+              execution_successful: true,
+              start_time_utc: "2024-01-02T00:00:00Z",
+              end_time_utc: "2024-01-01T00:00:00Z"
+            ),
+          ]
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_false
+    result.errors.any? { |e| e.message.try(&.includes?("endTimeUtc must not be before startTimeUtc")) }.should be_true
+  end
+
+  it "detects empty codeFlow threadFlows" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+          results: [
+            Sarif::Result.new(
+              message: Sarif::Message.new(text: "issue"),
+              code_flows: [
+                Sarif::CodeFlow.new(thread_flows: [] of Sarif::ThreadFlow),
+              ]
+            ),
+          ]
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_false
+    result.errors.any? { |e| e.message.try(&.includes?("at least one threadFlow")) }.should be_true
+  end
+
+  it "detects empty fix artifactChanges" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+          results: [
+            Sarif::Result.new(
+              message: Sarif::Message.new(text: "issue"),
+              fixes: [
+                Sarif::Fix.new(artifact_changes: [] of Sarif::ArtifactChange),
+              ]
+            ),
+          ]
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_false
+    result.errors.any? { |e| e.message.try(&.includes?("at least one artifactChange")) }.should be_true
+  end
+
+  it "detects empty versionControlProvenance repositoryUri" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+          version_control_provenance: [
+            Sarif::VersionControlDetails.new(repository_uri: ""),
+          ]
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_false
+    result.errors.any? { |e| e.message.try(&.includes?("repositoryUri must not be empty")) }.should be_true
+  end
+
+  it "validates tool extensions" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(
+            driver: Sarif::ToolComponent.new(name: "Tool"),
+            extensions: [Sarif::ToolComponent.new(name: "")]
+          ),
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_false
+    result.errors.any? { |e| e.path.includes?("extensions[0]") }.should be_true
+  end
 end
