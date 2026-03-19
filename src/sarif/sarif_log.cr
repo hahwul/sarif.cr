@@ -37,5 +37,13 @@ module Sarif
     def results_by_rule_id(rule_id : String) : Array(Result)
       all_results.select { |r| r.rule_id == rule_id }
     end
+
+    def valid? : Bool
+      return false unless version == SARIF_VERSION
+      runs.each do |run|
+        return false unless run.valid?
+      end
+      true
+    end
   end
 end

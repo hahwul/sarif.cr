@@ -151,4 +151,49 @@ describe Sarif::SarifLog do
     restored.runs[0].tool.driver.name.should eq("Tool1")
     restored.runs[1].tool.driver.name.should eq("Tool2")
   end
+
+  describe "#valid?" do
+    it "returns true for valid log" do
+      log = Sarif::SarifLog.new(
+        runs: [
+          Sarif::Run.new(
+            tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+            results: [Sarif::Result.new(message: Sarif::Message.new(text: "issue"))]
+          ),
+        ]
+      )
+      log.valid?.should be_true
+    end
+
+    it "returns false for invalid version" do
+      log = Sarif::SarifLog.new(
+        version: "1.0.0",
+        runs: [
+          Sarif::Run.new(tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool"))),
+        ]
+      )
+      log.valid?.should be_false
+    end
+
+    it "returns false when a run is invalid" do
+      log = Sarif::SarifLog.new(
+        runs: [
+          Sarif::Run.new(tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: ""))),
+        ]
+      )
+      log.valid?.should be_false
+    end
+
+    it "returns false when a result in a run is invalid" do
+      log = Sarif::SarifLog.new(
+        runs: [
+          Sarif::Run.new(
+            tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+            results: [Sarif::Result.new(message: Sarif::Message.new)]
+          ),
+        ]
+      )
+      log.valid?.should be_false
+    end
+  end
 end

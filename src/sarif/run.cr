@@ -117,5 +117,13 @@ module Sarif
     def rule_by_id(rule_id : String) : ReportingDescriptor?
       tool.driver.rules.try &.find { |r| r.id == rule_id }
     end
+
+    def valid? : Bool
+      return false if tool.driver.name.empty?
+      results.try &.each do |result|
+        return false unless result.valid?
+      end
+      true
+    end
   end
 end

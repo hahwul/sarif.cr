@@ -113,5 +113,16 @@ module Sarif
     def effective_kind : ResultKind
       kind || ResultKind::Fail
     end
+
+    def valid? : Bool
+      return false unless message.valid?
+      if (r = rank) && (r < 0.0 || r > 100.0)
+        return false
+      end
+      if (c = occurrence_count) && c < 1
+        return false
+      end
+      true
+    end
   end
 end

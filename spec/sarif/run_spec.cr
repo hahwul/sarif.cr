@@ -153,4 +153,36 @@ describe Sarif::Run do
     restored.language.should eq("en-US")
     restored.column_kind.should eq(Sarif::ColumnKind::UnicodeCodePoints)
   end
+
+  describe "#valid?" do
+    it "returns true for valid run" do
+      run = Sarif::Run.new(
+        tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+        results: [Sarif::Result.new(message: Sarif::Message.new(text: "issue"))]
+      )
+      run.valid?.should be_true
+    end
+
+    it "returns false when tool driver name is empty" do
+      run = Sarif::Run.new(
+        tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: ""))
+      )
+      run.valid?.should be_false
+    end
+
+    it "returns false when a result is invalid" do
+      run = Sarif::Run.new(
+        tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+        results: [Sarif::Result.new(message: Sarif::Message.new)]
+      )
+      run.valid?.should be_false
+    end
+
+    it "returns true when results is nil" do
+      run = Sarif::Run.new(
+        tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool"))
+      )
+      run.valid?.should be_true
+    end
+  end
 end

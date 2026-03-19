@@ -40,4 +40,22 @@ describe Sarif::Message do
     restored.id.should eq("rule1")
     restored.arguments.should eq(["x"])
   end
+
+  describe "#valid?" do
+    it "returns true when text is present" do
+      Sarif::Message.new(text: "Hello").valid?.should be_true
+    end
+
+    it "returns true when id is present" do
+      Sarif::Message.new(id: "msg1").valid?.should be_true
+    end
+
+    it "returns true when both text and id are present" do
+      Sarif::Message.new(text: "Hello", id: "msg1").valid?.should be_true
+    end
+
+    it "returns false when neither text nor id is present" do
+      Sarif::Message.new.valid?.should be_false
+    end
+  end
 end
