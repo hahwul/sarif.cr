@@ -1,6 +1,9 @@
 module Sarif
+  # Default maximum input size (100 MB) for parser size limits.
   DEFAULT_MAX_INPUT_SIZE = 100 * 1024 * 1024 # 100 MB
 
+  # Parses a SARIF JSON string into a `SarifLog`.
+  # Pass `max_size` to reject inputs exceeding the byte limit.
   def self.parse(json : String, *, max_size : Int64? = nil) : SarifLog
     if limit = max_size
       if json.bytesize > limit
@@ -22,6 +25,7 @@ module Sarif
     end
   end
 
+  # Reads and parses a SARIF file from the given path.
   def self.from_file(path : String, *, max_size : Int64? = nil) : SarifLog
     if limit = max_size
       file_size = File.size(path)
@@ -32,6 +36,7 @@ module Sarif
     File.open(path) { |io| SarifLog.from_json(io) }
   end
 
+  # Parses and validates a SARIF JSON string. Raises `ParseError` on validation failure.
   def self.parse!(json : String, *, max_size : Int64? = nil) : SarifLog
     log = parse(json, max_size: max_size)
     validate!(log)

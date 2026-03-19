@@ -1,7 +1,9 @@
 module Sarif
+  # Base error class for all SARIF errors.
   class Error < Exception
   end
 
+  # Represents a single validation error with a JSONPath-like path.
   class ValidationError < Error
     getter path : String
 
@@ -18,6 +20,7 @@ module Sarif
     end
   end
 
+  # Raised when `parse!` encounters validation errors.
   class ParseError < Error
     getter validation_errors : Array(ValidationError)
 
@@ -27,6 +30,7 @@ module Sarif
     end
   end
 
+  # The result of validating a SARIF document. Check `#valid?` and `#errors`.
   class ValidationResult
     getter errors : Array(ValidationError)
 
@@ -38,6 +42,19 @@ module Sarif
     end
   end
 
+  # Validates a `SarifLog` against SARIF 2.1.0 constraints.
+  #
+  # ```
+  # result = Sarif::Validator.new.validate(log)
+  # unless result.valid?
+  #   result.errors.each { |e| puts e }
+  # end
+  # ```
+  #
+  # Supports optional limits to prevent resource exhaustion:
+  # ```
+  # validator = Sarif::Validator.new(max_runs: 10, max_results: 1000)
+  # ```
   class Validator
     private GUID_PATTERN = /\A[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\z/
     private RFC3339_PATTERN = /\A\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})\z/

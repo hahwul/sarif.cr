@@ -1,6 +1,11 @@
 require "json"
 
 module Sarif
+  # A single invocation of a single analysis tool on a single artifact or set of artifacts.
+  #
+  # A `Run` contains the tool description, results, artifacts analyzed, and invocation details.
+  #
+  # See: [SARIF 2.1.0 §3.14](https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html#_Toc34317484)
   class Run
     include JSON::Serializable
 

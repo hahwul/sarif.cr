@@ -1,6 +1,12 @@
 require "json"
 
 module Sarif
+  # A single result (finding) from a static analysis tool.
+  #
+  # Each result must have a `message` with either text or an id.
+  # Optionally references a rule via `rule_id` and/or `rule_index`.
+  #
+  # See: [SARIF 2.1.0 §3.27](https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html#_Toc34317638)
   class Result
     include JSON::Serializable
 

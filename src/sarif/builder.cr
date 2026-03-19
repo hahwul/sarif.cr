@@ -1,7 +1,19 @@
 module Sarif
+  # DSL for building SARIF documents programmatically.
+  #
+  # ```
+  # log = Sarif::Builder.build do |b|
+  #   b.run("MyLinter", "1.0") do |r|
+  #     r.rule("R001", short_description: "Unused variable")
+  #     r.result("Found unused var", rule_id: "R001",
+  #       level: Sarif::Level::Warning, uri: "src/main.cr", start_line: 10)
+  #   end
+  # end
+  # ```
   class Builder
     @runs = [] of Run
 
+    # Builds a `SarifLog` using the builder DSL.
     def self.build(& : Builder ->) : SarifLog
       builder = new
       yield builder
