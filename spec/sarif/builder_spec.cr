@@ -178,4 +178,121 @@ describe Sarif::Builder do
     parsed["$schema"].as_s.should contain("sarif-schema")
     parsed["runs"][0]["tool"]["driver"]["name"].as_s.should eq("MyLinter")
   end
+
+  it "builds code_flow with DSL block" do
+    log = Sarif::Builder.build do |b|
+      b.run("Tool") do |r|
+        r.result do |rb|
+          rb.message("Taint flow")
+          rb.code_flow("Data flow") do |cf|
+            cf.thread_flow do |tf|
+              tf.location(uri: "src/input.cr", start_line: 5, message: "source")
+              tf.location(uri: "src/process.cr", start_line: 20, message: "propagation")
+              tf.location(uri: "src/output.cr", start_line: 42, message: "sink")
+            end
+          end
+        end
+      end
+    end
+    result = log.runs[0].results.not_nil![0]
+    code_flows = result.code_flows.not_nil!
+    code_flows.size.should eq(1)
+    code_flows[0].message.not_nil!.text.should eq("Data flow")
+
+    thread_flows = code_flows[0].thread_flows
+    thread_flows.size.should eq(1)
+    thread_flows[0].locations.size.should eq(3)
+    thread_flows[0].locations[0].location.not_nil!.message.not_nil!.text.should eq("source")
+    thread_flows[0].locations[1].location.not_nil!.physical_location.not_nil!
+      .region.not_nil!.start_line.should eq(20)
+    thread_flows[0].locations[2].location.not_nil!.message.not_nil!.text.should eq("sink")
+  end
+
+  it "builds fix with DSL block" do
+    log = Sarif::Builder.build do |b|
+      b.run("Tool") do |r|
+        r.result do |rb|
+          rb.message("Fixable issue")
+          rb.fix("Replace deprecated call") do |f|
+            f.artifact_change("src/main.cr") do |ac|
+              ac.replacement(start_line: 10, start_column: 5, end_column: 15, inserted_text: "new_method")
+            end
+          end
+        end
+      end
+    end
+    result = log.runs[0].results.not_nil![0]
+    fixes = result.fixes.not_nil!
+    fixes.size.should eq(1)
+    fixes[0].description.not_nil!.text.should eq("Replace deprecated call")
+
+    changes = fixes[0].artifact_changes
+    changes.size.should eq(1)
+    changes[0].artifact_location.uri.should eq("src/main.cr")
+    changes[0].replacements.size.should eq(1)
+    changes[0].replacements[0].deleted_region.start_line.should eq(10)
+    changes[0].replacements[0].inserted_content.not_nil!.text.should eq("new_method")
+  end
+
+  it "builds suppression with DSL" do
+    log = Sarif::Builder.build do |b|
+      b.run("Tool") do |r|
+        r.result do |rb|
+          rb.message("Suppressed issue")
+          rb.suppression(Sarif::SuppressionKind::InSource, justification: "false positive")
+          rb.suppression(Sarif::SuppressionKind::External, status: Sarif::SuppressionStatus::Accepted)
+        end
+      end
+    end
+    result = log.runs[0].results.not_nil![0]
+    suppressions = result.suppressions.not_nil!
+    suppressions.size.should eq(2)
+    suppressions[0].kind.should eq(Sarif::SuppressionKind::InSource)
+    suppressions[0].justification.should eq("false positive")
+    suppressions[1].kind.should eq(Sarif::SuppressionKind::External)
+    suppressions[1].status.should eq(Sarif::SuppressionStatus::Accepted)
+  end
+
+  it "builds code_flow with multiple thread flows" do
+    log = Sarif::Builder.build do |b|
+      b.run("Tool") do |r|
+        r.result do |rb|
+          rb.message("Multi-thread flow")
+          rb.code_flow do |cf|
+            cf.thread_flow(id: "thread-1") do |tf|
+              tf.location(uri: "a.cr", start_line: 1, message: "step 1")
+            end
+            cf.thread_flow(id: "thread-2") do |tf|
+              tf.location(uri: "b.cr", start_line: 2, message: "step 1")
+            end
+          end
+        end
+      end
+    end
+    code_flow = log.runs[0].results.not_nil![0].code_flows.not_nil![0]
+    code_flow.thread_flows.size.should eq(2)
+    code_flow.thread_flows[0].id.should eq("thread-1")
+    code_flow.thread_flows[1].id.should eq("thread-2")
+  end
+
+  it "builds thread_flow location with importance and nesting_level" do
+    log = Sarif::Builder.build do |b|
+      b.run("Tool") do |r|
+        r.result do |rb|
+          rb.message("issue")
+          rb.code_flow do |cf|
+            cf.thread_flow do |tf|
+              tf.location(uri: "a.cr", start_line: 1, importance: Sarif::Importance::Essential, nesting_level: 0)
+              tf.location(uri: "a.cr", start_line: 5, importance: Sarif::Importance::Unimportant, nesting_level: 1)
+            end
+          end
+        end
+      end
+    end
+    locs = log.runs[0].results.not_nil![0].code_flows.not_nil![0].thread_flows[0].locations
+    locs[0].importance.should eq(Sarif::Importance::Essential)
+    locs[0].nesting_level.should eq(0)
+    locs[1].importance.should eq(Sarif::Importance::Unimportant)
+    locs[1].nesting_level.should eq(1)
+  end
 end

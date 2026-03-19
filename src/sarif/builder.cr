@@ -142,6 +142,7 @@ module Sarif
     @related_locations = [] of Location
     @code_flows = [] of CodeFlow
     @fixes = [] of Fix
+    @suppressions = [] of Suppression
     @fingerprints : Hash(String, String)? = nil
     @partial_fingerprints : Hash(String, String)? = nil
 
@@ -184,8 +185,28 @@ module Sarif
       self
     end
 
+    def code_flow(message : String? = nil, & : CodeFlowBuilder ->) : self
+      builder = CodeFlowBuilder.new(message)
+      yield builder
+      @code_flows << builder.build
+      self
+    end
+
     def fix(fix : Fix) : self
       @fixes << fix
+      self
+    end
+
+    def fix(description : String? = nil, & : FixBuilder ->) : self
+      builder = FixBuilder.new(description)
+      yield builder
+      @fixes << builder.build
+      self
+    end
+
+    def suppression(kind : SuppressionKind, justification : String? = nil,
+                    status : SuppressionStatus? = nil) : self
+      @suppressions << Suppression.new(kind: kind, justification: justification, status: status)
       self
     end
 
@@ -210,8 +231,108 @@ module Sarif
         related_locations: Sarif.nil_if_empty(@related_locations),
         code_flows: Sarif.nil_if_empty(@code_flows),
         fixes: Sarif.nil_if_empty(@fixes),
+        suppressions: Sarif.nil_if_empty(@suppressions),
         fingerprints: @fingerprints,
         partial_fingerprints: @partial_fingerprints
+      )
+    end
+  end
+
+  class CodeFlowBuilder
+    @message : String?
+    @thread_flows = [] of ThreadFlow
+
+    def initialize(@message : String? = nil)
+    end
+
+    def thread_flow(id : String? = nil, message : String? = nil, & : ThreadFlowBuilder ->) : self
+      builder = ThreadFlowBuilder.new(id, message)
+      yield builder
+      @thread_flows << builder.build
+      self
+    end
+
+    def build : CodeFlow
+      msg = @message ? Message.new(text: @message) : nil
+      CodeFlow.new(thread_flows: @thread_flows, message: msg)
+    end
+  end
+
+  class ThreadFlowBuilder
+    @id : String?
+    @message : String?
+    @locations = [] of ThreadFlowLocation
+
+    def initialize(@id : String? = nil, @message : String? = nil)
+    end
+
+    def location(uri : String? = nil, start_line : Int32? = nil, message : String? = nil,
+                 start_column : Int32? = nil, end_line : Int32? = nil,
+                 end_column : Int32? = nil, importance : Importance? = nil,
+                 nesting_level : Int32? = nil) : self
+      loc = Sarif.build_location(uri: uri, start_line: start_line,
+        start_column: start_column, end_line: end_line, end_column: end_column)
+      if message
+        loc = Location.new(physical_location: loc.physical_location,
+          message: Message.new(text: message))
+      end
+      @locations << ThreadFlowLocation.new(
+        location: loc, importance: importance, nesting_level: nesting_level
+      )
+      self
+    end
+
+    def build : ThreadFlow
+      msg = @message ? Message.new(text: @message) : nil
+      ThreadFlow.new(locations: @locations, id: @id, message: msg)
+    end
+  end
+
+  class FixBuilder
+    @description : String?
+    @artifact_changes = [] of ArtifactChange
+
+    def initialize(@description : String? = nil)
+    end
+
+    def artifact_change(uri : String, & : ArtifactChangeBuilder ->) : self
+      builder = ArtifactChangeBuilder.new(uri)
+      yield builder
+      @artifact_changes << builder.build
+      self
+    end
+
+    def build : Fix
+      desc = @description ? Message.new(text: @description) : nil
+      Fix.new(artifact_changes: @artifact_changes, description: desc)
+    end
+  end
+
+  class ArtifactChangeBuilder
+    @uri : String
+    @replacements = [] of Replacement
+
+    def initialize(@uri : String)
+    end
+
+    def replacement(start_line : Int32, start_column : Int32 = 1,
+                    end_line : Int32? = nil, end_column : Int32? = nil,
+                    inserted_text : String? = nil) : self
+      deleted_region = Region.new(
+        start_line: start_line, start_column: start_column,
+        end_line: end_line || start_line, end_column: end_column
+      )
+      inserted_content = inserted_text ? ArtifactContent.new(text: inserted_text) : nil
+      @replacements << Replacement.new(
+        deleted_region: deleted_region, inserted_content: inserted_content
+      )
+      self
+    end
+
+    def build : ArtifactChange
+      ArtifactChange.new(
+        artifact_location: ArtifactLocation.new(uri: @uri),
+        replacements: @replacements
       )
     end
   end
