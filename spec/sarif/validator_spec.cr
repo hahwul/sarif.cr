@@ -100,6 +100,131 @@ describe Sarif::Validator do
     result.errors.any? { |e| e.message.try(&.includes?("does not match")) }.should be_true
   end
 
+  it "detects invalid region startLine" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+          results: [
+            Sarif::Result.new(
+              message: Sarif::Message.new(text: "issue"),
+              locations: [
+                Sarif::Location.new(
+                  physical_location: Sarif::PhysicalLocation.new(
+                    region: Sarif::Region.new(start_line: 0)
+                  )
+                ),
+              ]
+            ),
+          ]
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_false
+    result.errors.any? { |e| e.message.try(&.includes?("startLine must be >= 1")) }.should be_true
+  end
+
+  it "detects invalid region startColumn" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+          results: [
+            Sarif::Result.new(
+              message: Sarif::Message.new(text: "issue"),
+              locations: [
+                Sarif::Location.new(
+                  physical_location: Sarif::PhysicalLocation.new(
+                    region: Sarif::Region.new(start_line: 1, start_column: 0)
+                  )
+                ),
+              ]
+            ),
+          ]
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_false
+    result.errors.any? { |e| e.message.try(&.includes?("startColumn must be >= 1")) }.should be_true
+  end
+
+  it "detects endColumn < startColumn on same line" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+          results: [
+            Sarif::Result.new(
+              message: Sarif::Message.new(text: "issue"),
+              locations: [
+                Sarif::Location.new(
+                  physical_location: Sarif::PhysicalLocation.new(
+                    region: Sarif::Region.new(start_line: 5, end_line: 5, start_column: 10, end_column: 3)
+                  )
+                ),
+              ]
+            ),
+          ]
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_false
+    result.errors.any? { |e| e.message.try(&.includes?("endColumn")) }.should be_true
+  end
+
+  it "detects invalid region in relatedLocations" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+          results: [
+            Sarif::Result.new(
+              message: Sarif::Message.new(text: "issue"),
+              related_locations: [
+                Sarif::Location.new(
+                  physical_location: Sarif::PhysicalLocation.new(
+                    region: Sarif::Region.new(start_line: 0)
+                  )
+                ),
+              ]
+            ),
+          ]
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_false
+    result.errors.any? { |e| e.path.includes?("relatedLocations") }.should be_true
+  end
+
+  it "detects endLine < startLine" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+          results: [
+            Sarif::Result.new(
+              message: Sarif::Message.new(text: "issue"),
+              locations: [
+                Sarif::Location.new(
+                  physical_location: Sarif::PhysicalLocation.new(
+                    region: Sarif::Region.new(start_line: 10, end_line: 5)
+                  )
+                ),
+              ]
+            ),
+          ]
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_false
+    result.errors.any? { |e| e.message.try(&.includes?("endLine")) }.should be_true
+  end
+
   it "provides error path information" do
     log = Sarif::SarifLog.new(
       runs: [

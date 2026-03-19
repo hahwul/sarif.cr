@@ -109,6 +109,70 @@ module Sarif
           end
         end
       end
+
+      result.locations.try &.each_with_index do |loc, k|
+        validate_location(loc, "#{path}.locations[#{k}]", errors)
+      end
+
+      result.related_locations.try &.each_with_index do |loc, k|
+        validate_location(loc, "#{path}.relatedLocations[#{k}]", errors)
+      end
+    end
+
+    private def validate_location(location : Location, path : String,
+                                  errors : Array(ValidationError))
+      if physical = location.physical_location
+        if region = physical.region
+          validate_region(region, "#{path}.physicalLocation.region", errors)
+        end
+      end
+    end
+
+    private def validate_region(region : Region, path : String,
+                                errors : Array(ValidationError))
+      if (sl = region.start_line) && sl < 1
+        errors << ValidationError.new(
+          "startLine must be >= 1, got #{sl}",
+          "#{path}.startLine"
+        )
+      end
+
+      if (sc = region.start_column) && sc < 1
+        errors << ValidationError.new(
+          "startColumn must be >= 1, got #{sc}",
+          "#{path}.startColumn"
+        )
+      end
+
+      if (el = region.end_line) && el < 1
+        errors << ValidationError.new(
+          "endLine must be >= 1, got #{el}",
+          "#{path}.endLine"
+        )
+      end
+
+      if (ec = region.end_column) && ec < 1
+        errors << ValidationError.new(
+          "endColumn must be >= 1, got #{ec}",
+          "#{path}.endColumn"
+        )
+      end
+
+      if (sl = region.start_line) && (el = region.end_line)
+        if el < sl
+          errors << ValidationError.new(
+            "endLine (#{el}) must be >= startLine (#{sl})",
+            "#{path}.endLine"
+          )
+        elsif el == sl
+          if (sc = region.start_column) && (ec = region.end_column) && ec < sc
+            errors << ValidationError.new(
+              "endColumn (#{ec}) must be >= startColumn (#{sc}) on the same line",
+              "#{path}.endColumn"
+            )
+          end
+        end
+      end
     end
   end
 end

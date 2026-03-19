@@ -179,6 +179,16 @@ module Sarif
       self
     end
 
+    def code_flow(code_flow : CodeFlow) : self
+      @code_flows << code_flow
+      self
+    end
+
+    def fix(fix : Fix) : self
+      @fixes << fix
+      self
+    end
+
     def fingerprint(key : String, value : String) : self
       fp = @fingerprints ||= {} of String => String
       fp[key] = value

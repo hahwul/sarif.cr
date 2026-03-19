@@ -25,5 +25,17 @@ module Sarif
                    @inline_external_properties : Array(ExternalProperties)? = nil,
                    @properties : PropertyBag? = nil)
     end
+
+    def all_results : Array(Result)
+      runs.flat_map { |run| run.results || [] of Result }
+    end
+
+    def results_by_level(level : Level) : Array(Result)
+      all_results.select { |r| r.effective_level == level }
+    end
+
+    def results_by_rule_id(rule_id : String) : Array(Result)
+      all_results.select { |r| r.rule_id == rule_id }
+    end
   end
 end

@@ -109,6 +109,62 @@ describe Sarif::Builder do
     log.runs[1].tool.driver.name.should eq("Tool2")
   end
 
+  it "builds with code_flows via ResultBuilder" do
+    thread_flow = Sarif::ThreadFlow.new(
+      locations: [
+        Sarif::ThreadFlowLocation.new(
+          location: Sarif::Location.new(
+            physical_location: Sarif::PhysicalLocation.new(
+              artifact_location: Sarif::ArtifactLocation.new(uri: "src/a.cr"),
+              region: Sarif::Region.new(start_line: 1)
+            )
+          )
+        ),
+      ]
+    )
+    code_flow = Sarif::CodeFlow.new(thread_flows: [thread_flow])
+
+    log = Sarif::Builder.build do |b|
+      b.run("Tool") do |r|
+        r.result do |rb|
+          rb.message("Flow issue")
+          rb.code_flow(code_flow)
+        end
+      end
+    end
+    result = log.runs[0].results.not_nil![0]
+    result.code_flows.not_nil!.size.should eq(1)
+  end
+
+  it "builds with fixes via ResultBuilder" do
+    fix = Sarif::Fix.new(
+      artifact_changes: [
+        Sarif::ArtifactChange.new(
+          artifact_location: Sarif::ArtifactLocation.new(uri: "src/a.cr"),
+          replacements: [
+            Sarif::Replacement.new(
+              deleted_region: Sarif::Region.new(start_line: 1, start_column: 1, end_line: 1, end_column: 5),
+              inserted_content: Sarif::ArtifactContent.new(text: "fixed")
+            ),
+          ]
+        ),
+      ],
+      description: Sarif::Message.new(text: "Apply fix")
+    )
+
+    log = Sarif::Builder.build do |b|
+      b.run("Tool") do |r|
+        r.result do |rb|
+          rb.message("Fixable issue")
+          rb.fix(fix)
+        end
+      end
+    end
+    result = log.runs[0].results.not_nil![0]
+    result.fixes.not_nil!.size.should eq(1)
+    result.fixes.not_nil![0].description.not_nil!.text.should eq("Apply fix")
+  end
+
   it "produces valid JSON output" do
     log = Sarif::Builder.build do |b|
       b.run("MyLinter", "1.0.0") do |r|
