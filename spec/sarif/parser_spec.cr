@@ -65,6 +65,35 @@ describe "Sarif.parse" do
   end
 end
 
+describe "Sarif.parse with malformed JSON" do
+  it "raises on invalid JSON syntax" do
+    expect_raises(JSON::ParseException) do
+      Sarif.parse("{ invalid json }")
+    end
+  end
+
+  it "raises on empty string" do
+    expect_raises(JSON::ParseException) do
+      Sarif.parse("")
+    end
+  end
+
+  it "raises on missing required fields" do
+    expect_raises(JSON::SerializableError) do
+      Sarif.parse(%({ "version": "2.1.0" }))
+    end
+  end
+
+  it "raises on wrong JSON type for field" do
+    expect_raises(JSON::SerializableError) do
+      Sarif.parse(%({
+        "version": "2.1.0",
+        "runs": "not an array"
+      }))
+    end
+  end
+end
+
 describe "Sarif.parse!" do
   it "succeeds for valid SARIF" do
     json = %({

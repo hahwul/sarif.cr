@@ -295,4 +295,49 @@ describe Sarif::Builder do
     locs[1].importance.should eq(Sarif::Importance::Unimportant)
     locs[1].nesting_level.should eq(1)
   end
+
+  it "sets nil ruleIndex when rule_id doesn't match any rule" do
+    log = Sarif::Builder.build do |b|
+      b.run("Tool") do |r|
+        r.rule("R001", name: "ExistingRule")
+        r.result("Issue", rule_id: "NONEXISTENT", level: Sarif::Level::Warning)
+      end
+    end
+    result = log.runs[0].results.not_nil![0]
+    result.rule_id.should eq("NONEXISTENT")
+    result.rule_index.should be_nil
+  end
+
+  it "builds result without locations when no uri or line given" do
+    log = Sarif::Builder.build do |b|
+      b.run("Tool") do |r|
+        r.result("No location")
+      end
+    end
+    result = log.runs[0].results.not_nil![0]
+    result.locations.should be_nil
+  end
+
+  it "builds empty run with no results or artifacts" do
+    log = Sarif::Builder.build do |b|
+      b.run("EmptyTool") { }
+    end
+    run = log.runs[0]
+    run.results.should be_nil
+    run.artifacts.should be_nil
+    run.invocations.should be_nil
+    run.tool.driver.rules.should be_nil
+  end
+
+  it "validates built log passes validator" do
+    log = Sarif::Builder.build do |b|
+      b.run("Tool", "1.0") do |r|
+        r.rule("R1", short_description: "Test rule")
+        r.result("Issue found", rule_id: "R1", level: Sarif::Level::Warning,
+          uri: "src/main.cr", start_line: 10)
+      end
+    end
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_true
+  end
 end

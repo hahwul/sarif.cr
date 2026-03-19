@@ -47,4 +47,29 @@ describe Sarif::PropertyBag do
     bag = Sarif::PropertyBag.new
     bag["missing"]?.should be_nil
   end
+
+  it "handles type mismatch gracefully with []?" do
+    bag = Sarif::PropertyBag.new
+    bag["count"] = JSON::Any.new(42_i64)
+    bag["count"]?.should_not be_nil
+    bag["count"].as_i.should eq(42)
+    # Accessing as wrong type raises
+    expect_raises(Exception) do
+      bag["count"].as_s
+    end
+  end
+
+  it "supports boolean values" do
+    bag = Sarif::PropertyBag.new
+    bag["enabled"] = JSON::Any.new(true)
+    json = bag.to_json
+    restored = Sarif::PropertyBag.from_json(json)
+    restored["enabled"].as_bool.should be_true
+  end
+
+  it "supports null values" do
+    json = %({ "value": null })
+    bag = Sarif::PropertyBag.from_json(json)
+    bag["value"].raw.should be_nil
+  end
 end
