@@ -143,3 +143,106 @@ describe "Sarif.from_file" do
     end
   end
 end
+
+describe "Sarif.parse with max_size" do
+  it "accepts input within size limit" do
+    json = %({
+      "version": "2.1.0",
+      "runs": [{
+        "tool": { "driver": { "name": "Tool" } }
+      }]
+    })
+    log = Sarif.parse(json, max_size: 1024_i64)
+    log.runs[0].tool.driver.name.should eq("Tool")
+  end
+
+  it "rejects input exceeding size limit" do
+    json = %({
+      "version": "2.1.0",
+      "runs": [{
+        "tool": { "driver": { "name": "Tool" } }
+      }]
+    })
+    expect_raises(Sarif::Error, /exceeds maximum allowed size/) do
+      Sarif.parse(json, max_size: 10_i64)
+    end
+  end
+
+  it "rejects IO input exceeding size limit" do
+    json = %({
+      "version": "2.1.0",
+      "runs": [{
+        "tool": { "driver": { "name": "Tool" } }
+      }]
+    })
+    io = IO::Memory.new(json)
+    expect_raises(Sarif::Error, /exceeds maximum allowed size/) do
+      Sarif.parse(io, max_size: 10_i64)
+    end
+  end
+
+  it "rejects file exceeding size limit" do
+    json = %({
+      "version": "2.1.0",
+      "runs": [{
+        "tool": { "driver": { "name": "Tool" } }
+      }]
+    })
+    tmp = File.tempfile("sarif", ".json") do |f|
+      f.print json
+    end
+    begin
+      expect_raises(Sarif::Error, /exceeds maximum allowed size/) do
+        Sarif.from_file(tmp.path, max_size: 10_i64)
+      end
+    ensure
+      tmp.delete
+    end
+  end
+end
+
+describe "Sarif::Validator with array limits" do
+  it "detects runs array exceeding max_runs" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool1"))),
+        Sarif::Run.new(tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool2"))),
+        Sarif::Run.new(tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool3"))),
+      ]
+    )
+    result = Sarif::Validator.new(max_runs: 2).validate(log)
+    result.valid?.should be_false
+    result.errors.any? { |e| e.message.try(&.includes?("exceeds maximum")) }.should be_true
+  end
+
+  it "detects results array exceeding max_results" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+          results: [
+            Sarif::Result.new(message: Sarif::Message.new(text: "A")),
+            Sarif::Result.new(message: Sarif::Message.new(text: "B")),
+            Sarif::Result.new(message: Sarif::Message.new(text: "C")),
+          ]
+        ),
+      ]
+    )
+    result = Sarif::Validator.new(max_results: 2).validate(log)
+    result.valid?.should be_false
+    result.errors.any? { |e| e.message.try(&.includes?("exceeds maximum")) }.should be_true
+  end
+
+  it "passes when within limits" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+          results: [Sarif::Result.new(message: Sarif::Message.new(text: "A"))]
+        ),
+      ]
+    )
+    result = Sarif::Validator.new(max_runs: 5, max_results: 10).validate(log)
+    result.valid?.should be_true
+  end
+end

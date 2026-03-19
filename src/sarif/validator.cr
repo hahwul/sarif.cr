@@ -43,10 +43,17 @@ module Sarif
     private RFC3339_PATTERN = /\A\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})\z/
     private URI_PATTERN     = /\A[a-zA-Z][a-zA-Z0-9+\-.]*:/
 
+    getter max_results : Int32?
+    getter max_runs : Int32?
+
+    def initialize(@max_results : Int32? = nil, @max_runs : Int32? = nil)
+    end
+
     def validate(log : SarifLog) : ValidationResult
       errors = [] of ValidationError
 
       validate_version(log, errors)
+      validate_array_limit(log.runs, max_runs, "$.runs", "runs", errors)
       validate_runs(log, errors)
 
       ValidationResult.new(errors)
@@ -69,6 +76,10 @@ module Sarif
 
     private def validate_run(run : Run, path : String, errors : Array(ValidationError))
       validate_tool(run.tool, "#{path}.tool", errors)
+
+      if results = run.results
+        validate_array_limit(results, max_results, "#{path}.results", "results", errors)
+      end
 
       run.results.try &.each_with_index do |result, j|
         validate_result(result, run, "#{path}.results[#{j}]", errors)
@@ -345,6 +356,17 @@ module Sarif
       unless URI_PATTERN.matches?(value)
         errors << ValidationError.new(
           "Invalid URI format: '#{value}'. Expected absolute URI with scheme",
+          path
+        )
+      end
+    end
+
+    private def validate_array_limit(array : Array, limit : Int32?, path : String,
+                                     name : String, errors : Array(ValidationError))
+      return unless max = limit
+      if array.size > max
+        errors << ValidationError.new(
+          "#{name} array size #{array.size} exceeds maximum allowed size of #{max}",
           path
         )
       end
