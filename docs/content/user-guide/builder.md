@@ -104,6 +104,73 @@ log = Sarif::Builder.build do |b|
 end
 ```
 
+## Code Flows
+
+Build code flows to describe data or control flow paths:
+
+```crystal
+log = Sarif::Builder.build do |b|
+  b.run("TaintAnalyzer") do |r|
+    r.result do |rb|
+      rb.message("Tainted data flows to SQL query")
+      rb.rule_id("SEC001")
+      rb.level(Sarif::Level::Error)
+
+      rb.code_flow("Taint flow") do |cf|
+        cf.thread_flow("main") do |tf|
+          tf.location("src/input.cr", 5, message: "User input received")
+          tf.location("src/transform.cr", 12, message: "Data transformed")
+          tf.location("src/query.cr", 20,
+            message: "Used in SQL query",
+            importance: Sarif::Importance::Essential)
+        end
+      end
+    end
+  end
+end
+```
+
+## Fixes
+
+Describe suggested fixes with artifact changes and replacements:
+
+```crystal
+log = Sarif::Builder.build do |b|
+  b.run("Linter") do |r|
+    r.result do |rb|
+      rb.message("Unused variable 'x'")
+      rb.rule_id("LINT001")
+
+      rb.fix("Remove unused variable") do |f|
+        f.artifact_change("src/app.cr") do |ac|
+          ac.replacement(10, 1, 10, 20, inserted_text: "")
+        end
+      end
+    end
+  end
+end
+```
+
+## Suppressions
+
+Mark results as suppressed:
+
+```crystal
+log = Sarif::Builder.build do |b|
+  b.run("Scanner") do |r|
+    r.result do |rb|
+      rb.message("Known false positive")
+      rb.rule_id("FP001")
+      rb.suppression(
+        Sarif::SuppressionKind::InSource,
+        justification: "Verified false positive",
+        status: Sarif::SuppressionStatus::Accepted
+      )
+    end
+  end
+end
+```
+
 ## Complete Example
 
 ```crystal

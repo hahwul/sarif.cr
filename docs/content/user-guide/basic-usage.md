@@ -126,6 +126,54 @@ result.kind               # => nil
 result.effective_kind     # => Sarif::ResultKind::Fail (SARIF default)
 ```
 
+## Querying Results
+
+`SarifLog` and `Run` provide helpers to filter and aggregate results without manual iteration.
+
+### Filtering
+
+```crystal
+log = Sarif.from_file("results.sarif")
+
+# Filter by level
+errors = log.find_results(level: Sarif::Level::Error)
+
+# Filter by rule ID
+rule_results = log.find_results(rule_id: "SEC001")
+
+# Combine criteria (AND logic)
+critical = log.find_results(rule_id: "SEC001", level: Sarif::Level::Error)
+
+# Filter by kind
+open_issues = log.find_results(kind: Sarif::ResultKind::Open)
+```
+
+The same methods are available on individual `Run` objects:
+
+```crystal
+run = log.runs[0]
+warnings = run.find_results(level: Sarif::Level::Warning)
+```
+
+### Aggregation
+
+```crystal
+# Count results by severity
+log.result_counts_by_level
+# => {Sarif::Level::Warning => 5, Sarif::Level::Error => 2}
+
+# Count results by rule
+log.result_counts_by_rule_id
+# => {"SEC001" => 3, "SEC002" => 4}
+```
+
+### Location Search
+
+```crystal
+# Find all locations referencing a specific file
+locations = log.find_locations_in_file("src/app.cr")
+```
+
 ## Nil Omission
 
 Optional fields set to `nil` are omitted from JSON output. This produces clean, minimal SARIF:
