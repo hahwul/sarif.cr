@@ -79,6 +79,52 @@ describe Sarif::Region do
     parsed["byteOffset"].as_i.should eq(100)
     parsed["byteLength"].as_i.should eq(50)
   end
+
+  it "creates with line range" do
+    region = Sarif::Region.new(start_line: 1, start_column: 1, end_line: 10, end_column: 80)
+    region.start_line.should eq(1)
+    region.end_line.should eq(10)
+  end
+
+  it "supports char offset/length" do
+    region = Sarif::Region.new(char_offset: 200, char_length: 50)
+    json = region.to_json
+    parsed = JSON.parse(json)
+    parsed["charOffset"].as_i.should eq(200)
+    parsed["charLength"].as_i.should eq(50)
+  end
+
+  it "supports snippet" do
+    region = Sarif::Region.new(
+      start_line: 1,
+      snippet: Sarif::ArtifactContent.new(text: "puts 'hello'")
+    )
+    region.snippet.not_nil!.text.should eq("puts 'hello'")
+  end
+
+  it "supports message and source language" do
+    region = Sarif::Region.new(
+      start_line: 1,
+      message: Sarif::Message.new(text: "relevant region"),
+      source_language: "crystal"
+    )
+    json = region.to_json
+    parsed = JSON.parse(json)
+    parsed["sourceLanguage"].as_s.should eq("crystal")
+  end
+
+  it "round-trips through JSON" do
+    region = Sarif::Region.new(
+      start_line: 10, start_column: 5, end_line: 12, end_column: 30,
+      byte_offset: 100, byte_length: 50,
+      char_offset: 100, char_length: 50
+    )
+    restored = Sarif::Region.from_json(region.to_json)
+    restored.start_line.should eq(10)
+    restored.start_column.should eq(5)
+    restored.byte_offset.should eq(100)
+    restored.char_offset.should eq(100)
+  end
 end
 
 describe Sarif::ArtifactLocation do
@@ -87,5 +133,44 @@ describe Sarif::ArtifactLocation do
     json = al.to_json
     parsed = JSON.parse(json)
     parsed["uriBaseId"].as_s.should eq("%SRCROOT%")
+  end
+end
+
+describe Sarif::Replacement do
+  it "creates with deleted region" do
+    r = Sarif::Replacement.new(
+      deleted_region: Sarif::Region.new(start_line: 1, end_line: 1)
+    )
+    r.deleted_region.start_line.should eq(1)
+    r.inserted_content.should be_nil
+  end
+
+  it "creates with inserted content" do
+    r = Sarif::Replacement.new(
+      deleted_region: Sarif::Region.new(byte_offset: 0, byte_length: 5),
+      inserted_content: Sarif::ArtifactContent.new(text: "new text")
+    )
+    r.inserted_content.not_nil!.text.should eq("new text")
+  end
+
+  it "serializes with camelCase keys" do
+    r = Sarif::Replacement.new(
+      deleted_region: Sarif::Region.new(start_line: 1),
+      inserted_content: Sarif::ArtifactContent.new(text: "x")
+    )
+    json = r.to_json
+    parsed = JSON.parse(json)
+    parsed["deletedRegion"]["startLine"].as_i.should eq(1)
+    parsed["insertedContent"]["text"].as_s.should eq("x")
+  end
+
+  it "round-trips through JSON" do
+    r = Sarif::Replacement.new(
+      deleted_region: Sarif::Region.new(start_line: 3, start_column: 1, end_line: 3, end_column: 10),
+      inserted_content: Sarif::ArtifactContent.new(text: "fixed_code")
+    )
+    restored = Sarif::Replacement.from_json(r.to_json)
+    restored.deleted_region.start_line.should eq(3)
+    restored.inserted_content.not_nil!.text.should eq("fixed_code")
   end
 end
