@@ -66,26 +66,26 @@ describe "Sarif.parse" do
 end
 
 describe "Sarif.parse with malformed JSON" do
-  it "raises on invalid JSON syntax" do
-    expect_raises(JSON::ParseException) do
+  it "raises Sarif::Error on invalid JSON syntax" do
+    expect_raises(Sarif::Error, /Failed to parse SARIF JSON/) do
       Sarif.parse("{ invalid json }")
     end
   end
 
-  it "raises on empty string" do
-    expect_raises(JSON::ParseException) do
+  it "raises Sarif::Error on empty string" do
+    expect_raises(Sarif::Error, /Failed to parse SARIF JSON/) do
       Sarif.parse("")
     end
   end
 
-  it "raises on missing required fields" do
-    expect_raises(JSON::SerializableError) do
+  it "raises Sarif::Error on missing required fields" do
+    expect_raises(Sarif::Error, /Failed to parse SARIF JSON/) do
       Sarif.parse(%({ "version": "2.1.0" }))
     end
   end
 
-  it "raises on wrong JSON type for field" do
-    expect_raises(JSON::SerializableError) do
+  it "raises Sarif::Error on wrong JSON type for field" do
+    expect_raises(Sarif::Error, /Failed to parse SARIF JSON/) do
       Sarif.parse(%({
         "version": "2.1.0",
         "runs": "not an array"
@@ -223,6 +223,27 @@ describe "Sarif.parse with max_size" do
     begin
       expect_raises(Sarif::Error, /exceeds maximum allowed size/) do
         Sarif.from_file(tmp.path, max_size: 10_i64)
+      end
+    ensure
+      tmp.delete
+    end
+  end
+end
+
+describe "Sarif.from_file with file errors" do
+  it "raises Sarif::Error for non-existent file" do
+    expect_raises(Sarif::Error, /File not found/) do
+      Sarif.from_file("/tmp/nonexistent_sarif_file_#{Random.rand(100000)}.json")
+    end
+  end
+
+  it "raises Sarif::Error for invalid JSON in file" do
+    tmp = File.tempfile("sarif", ".json") do |f|
+      f.print "{ invalid json }"
+    end
+    begin
+      expect_raises(Sarif::Error, /Failed to parse SARIF file/) do
+        Sarif.from_file(tmp.path)
       end
     ensure
       tmp.delete
