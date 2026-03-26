@@ -498,6 +498,37 @@ describe Sarif::Validator do
     result.errors.any? { |e| e.message.try(&.includes?("repositoryUri must not be empty")) }.should be_true
   end
 
+  it "detects validation depth exceeding max_depth" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+          results: [
+            Sarif::Result.new(message: Sarif::Message.new(text: "issue")),
+          ]
+        ),
+      ]
+    )
+    result = Sarif::Validator.new(max_depth: 1).validate(log)
+    result.valid?.should be_false
+    result.errors.any? { |e| e.message.try(&.includes?("exceeds maximum allowed depth")) }.should be_true
+  end
+
+  it "passes validation when within max_depth" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+          results: [
+            Sarif::Result.new(message: Sarif::Message.new(text: "issue")),
+          ]
+        ),
+      ]
+    )
+    result = Sarif::Validator.new(max_depth: 100).validate(log)
+    result.valid?.should be_true
+  end
+
   it "validates tool extensions" do
     log = Sarif::SarifLog.new(
       runs: [

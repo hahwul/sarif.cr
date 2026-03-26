@@ -4,6 +4,9 @@ module Sarif
   VERSION = "0.1.0"
 end
 
+# Errors and foundation
+require "./sarif/errors"
+
 # Enums and foundation
 require "./sarif/enums"
 require "./sarif/property_bag"

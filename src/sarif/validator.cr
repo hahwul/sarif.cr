@@ -1,47 +1,4 @@
 module Sarif
-  # Base error class for all SARIF errors.
-  class Error < Exception
-  end
-
-  # Represents a single validation error with a JSONPath-like path.
-  class ValidationError < Error
-    getter path : String
-
-    def initialize(message : String, @path : String = "")
-      super(message)
-    end
-
-    def to_s(io : IO) : Nil
-      if @path.empty?
-        io << message
-      else
-        io << @path << ": " << message
-      end
-    end
-  end
-
-  # Raised when `parse!` encounters validation errors.
-  class ParseError < Error
-    getter validation_errors : Array(ValidationError)
-
-    def initialize(@validation_errors : Array(ValidationError))
-      messages = @validation_errors.map(&.to_s).join("; ")
-      super("SARIF validation failed: #{messages}")
-    end
-  end
-
-  # The result of validating a SARIF document. Check `#valid?` and `#errors`.
-  class ValidationResult
-    getter errors : Array(ValidationError)
-
-    def initialize(@errors : Array(ValidationError) = [] of ValidationError)
-    end
-
-    def valid? : Bool
-      @errors.empty?
-    end
-  end
-
   # Validates a `SarifLog` against SARIF 2.1.0 constraints.
   #
   # ```
@@ -53,7 +10,7 @@ module Sarif
   #
   # Supports optional limits to prevent resource exhaustion:
   # ```
-  # validator = Sarif::Validator.new(max_runs: 10, max_results: 1000)
+  # validator = Sarif::Validator.new(max_runs: 10, max_results: 1000, max_depth: 50)
   # ```
   class Validator
     private GUID_PATTERN = /\A[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\z/
@@ -62,8 +19,9 @@ module Sarif
 
     getter max_results : Int32?
     getter max_runs : Int32?
+    getter max_depth : Int32
 
-    def initialize(@max_results : Int32? = nil, @max_runs : Int32? = nil)
+    def initialize(@max_results : Int32? = nil, @max_runs : Int32? = nil, @max_depth : Int32 = 100)
     end
 
     def validate(log : SarifLog) : ValidationResult
@@ -71,7 +29,7 @@ module Sarif
 
       validate_version(log, errors)
       validate_array_limit(log.runs, max_runs, "$.runs", "runs", errors)
-      validate_runs(log, errors)
+      validate_runs(log, errors, depth: 1)
 
       ValidationResult.new(errors)
     end
@@ -85,13 +43,26 @@ module Sarif
       end
     end
 
-    private def validate_runs(log : SarifLog, errors : Array(ValidationError))
+    private def check_depth!(path : String, depth : Int32, errors : Array(ValidationError)) : Bool
+      if depth > max_depth
+        errors << ValidationError.new(
+          "Validation depth #{depth} exceeds maximum allowed depth of #{max_depth}",
+          path
+        )
+        return false
+      end
+      true
+    end
+
+    private def validate_runs(log : SarifLog, errors : Array(ValidationError), *, depth : Int32)
       log.runs.each_with_index do |run, i|
-        validate_run(run, "$.runs[#{i}]", errors)
+        validate_run(run, "$.runs[#{i}]", errors, depth: depth)
       end
     end
 
-    private def validate_run(run : Run, path : String, errors : Array(ValidationError))
+    private def validate_run(run : Run, path : String, errors : Array(ValidationError), *, depth : Int32)
+      return unless check_depth!(path, depth, errors)
+
       validate_tool(run.tool, "#{path}.tool", errors)
 
       if results = run.results
@@ -99,7 +70,7 @@ module Sarif
       end
 
       run.results.try &.each_with_index do |result, j|
-        validate_result(result, run, "#{path}.results[#{j}]", errors)
+        validate_result(result, run, "#{path}.results[#{j}]", errors, depth: depth + 1)
       end
 
       run.invocations.try &.each_with_index do |inv, j|
@@ -153,7 +124,9 @@ module Sarif
     end
 
     private def validate_result(result : Result, run : Run, path : String,
-                                errors : Array(ValidationError))
+                                errors : Array(ValidationError), *, depth : Int32)
+      return unless check_depth!(path, depth, errors)
+
       if result.message.text.nil? && result.message.id.nil?
         errors << ValidationError.new(
           "Result message must have either text or id",
@@ -168,20 +141,11 @@ module Sarif
             "Invalid ruleIndex: #{rule_index}",
             "#{path}.ruleIndex"
           )
-        end
-      end
-
-      if rule_id = result.rule_id
-        if rule_index = result.rule_index
-          rules = run.tool.driver.rules
-          if rules && rule_index >= 0 && rule_index < rules.size
-            if rules[rule_index].id != rule_id
-              errors << ValidationError.new(
-                "ruleId '#{rule_id}' does not match rule at ruleIndex #{rule_index} ('#{rules[rule_index].id}')",
-                "#{path}.ruleId"
-              )
-            end
-          end
+        elsif (rule_id = result.rule_id) && rules[rule_index].id != rule_id
+          errors << ValidationError.new(
+            "ruleId '#{rule_id}' does not match rule at ruleIndex #{rule_index} ('#{rules[rule_index].id}')",
+            "#{path}.ruleId"
+          )
         end
       end
 
