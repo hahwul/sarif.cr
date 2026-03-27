@@ -73,10 +73,7 @@ priority = 0.5
 [robots]
 enabled = true
 filename = "robots.txt"
-rules = [
-  { user_agent = "*", disallow = ["/admin", "/private"] },
-  { user_agent = "GPTBot", disallow = ["/"] }
-]
+rules = []
 
 # =============================================================================
 # SEO: LLMs.txt
