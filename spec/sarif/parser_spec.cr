@@ -4,7 +4,7 @@ describe "Sarif.parse" do
   it "parses minimal SARIF JSON" do
     json = %({
       "version": "2.1.0",
-      "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/main/sarif-2.1/schema/sarif-schema-2.1.0.json",
+      "$schema": "https://docs.oasis-open.org/sarif/sarif/v2.1.0/cos02/schemas/sarif-schema-2.1.0.json",
       "runs": [
         {
           "tool": {

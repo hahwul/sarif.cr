@@ -76,7 +76,7 @@ puts log.to_pretty_json
 | Constant | Value | Description |
 |----------|-------|-------------|
 | `Sarif::SARIF_VERSION` | `"2.1.0"` | Current SARIF specification version |
-| `Sarif::SARIF_SCHEMA` | `"https://raw.githubusercontent.com/oasis-tcs/sarif-spec/..."` | Official JSON schema URI |
+| `Sarif::SARIF_SCHEMA` | `"https://docs.oasis-open.org/sarif/sarif/v2.1.0/cos02/schemas/sarif-schema-2.1.0.json"` | Official JSON schema URI |
 
 ## Example
 
