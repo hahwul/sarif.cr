@@ -73,6 +73,15 @@ module Sarif
         validate_result(result, run, "#{path}.results[#{j}]", errors, depth: depth + 1)
       end
 
+      # Validate index references in results
+      artifact_count = run.artifacts.try(&.size) || 0
+      logical_location_count = run.logical_locations.try(&.size) || 0
+
+      run.results.try &.each_with_index do |result, j|
+        result_path = "#{path}.results[#{j}]"
+        validate_result_index_references(result, result_path, artifact_count, logical_location_count, errors)
+      end
+
       run.invocations.try &.each_with_index do |inv, j|
         validate_invocation(inv, "#{path}.invocations[#{j}]", errors)
       end
@@ -83,6 +92,14 @@ module Sarif
 
       run.version_control_provenance.try &.each_with_index do |vcd, j|
         validate_version_control_details(vcd, "#{path}.versionControlProvenance[#{j}]", errors)
+      end
+
+      run.graphs.try &.each_with_index do |graph, j|
+        validate_graph(graph, "#{path}.graphs[#{j}]", errors)
+      end
+
+      if refs = run.external_property_file_references
+        validate_external_property_file_references(refs, "#{path}.externalPropertyFileReferences", errors)
       end
 
       validate_guid(run.baseline_guid, "#{path}.baselineGuid", errors)
@@ -121,6 +138,10 @@ module Sarif
 
       validate_guid(descriptor.guid, "#{path}.guid", errors)
       validate_uri(descriptor.help_uri, "#{path}.helpUri", errors)
+
+      if config = descriptor.default_configuration
+        validate_reporting_configuration(config, "#{path}.defaultConfiguration", errors)
+      end
     end
 
     private def validate_result(result : Result, run : Run, path : String,
@@ -176,6 +197,18 @@ module Sarif
 
       result.code_flows.try &.each_with_index do |cf, k|
         validate_code_flow(cf, "#{path}.codeFlows[#{k}]", errors)
+      end
+
+      result.graphs.try &.each_with_index do |graph, k|
+        validate_graph(graph, "#{path}.graphs[#{k}]", errors)
+      end
+
+      result.graph_traversals.try &.each_with_index do |gt, k|
+        validate_graph_traversal(gt, "#{path}.graphTraversals[#{k}]", errors)
+      end
+
+      result.stacks.try &.each_with_index do |stack, k|
+        validate_stack(stack, "#{path}.stacks[#{k}]", errors)
       end
 
       result.fixes.try &.each_with_index do |fix, k|
@@ -258,9 +291,21 @@ module Sarif
     private def validate_location(location : Location, path : String,
                                   errors : Array(ValidationError))
       if physical = location.physical_location
-        if region = physical.region
-          validate_region(region, "#{path}.physicalLocation.region", errors)
-        end
+        validate_physical_location(physical, "#{path}.physicalLocation", errors)
+      end
+    end
+
+    private def validate_physical_location(physical : PhysicalLocation, path : String,
+                                           errors : Array(ValidationError))
+      if physical.artifact_location.nil? && physical.address.nil?
+        errors << ValidationError.new(
+          "physicalLocation must have either artifactLocation or address",
+          path
+        )
+      end
+
+      if region = physical.region
+        validate_region(region, "#{path}.region", errors)
       end
     end
 
@@ -340,6 +385,215 @@ module Sarif
           path
         )
       end
+    end
+
+    private def validate_graph_traversal(gt : GraphTraversal, path : String,
+                                        errors : Array(ValidationError))
+      if gt.run_graph_index.nil? && gt.result_graph_index.nil?
+        errors << ValidationError.new(
+          "graphTraversal must have either runGraphIndex or resultGraphIndex",
+          path
+        )
+      end
+    end
+
+    private def validate_stack(stack : Stack, path : String,
+                               errors : Array(ValidationError))
+      if stack.frames.empty?
+        errors << ValidationError.new(
+          "stack must have at least one frame",
+          "#{path}.frames"
+        )
+      end
+    end
+
+    private def validate_graph(graph : Graph, path : String,
+                               errors : Array(ValidationError))
+      if nodes = graph.nodes
+        node_ids = Set(String).new
+        nodes.each_with_index do |node, i|
+          validate_node(node, "#{path}.nodes[#{i}]", node_ids, errors)
+        end
+      end
+
+      if edges = graph.edges
+        edge_ids = Set(String).new
+        edges.each_with_index do |edge, i|
+          validate_edge(edge, "#{path}.edges[#{i}]", edge_ids, errors)
+        end
+      end
+    end
+
+    private def validate_node(node : Node, path : String, seen_ids : Set(String),
+                              errors : Array(ValidationError))
+      if node.id.empty?
+        errors << ValidationError.new(
+          "node id must not be empty",
+          "#{path}.id"
+        )
+      elsif seen_ids.includes?(node.id)
+        errors << ValidationError.new(
+          "duplicate node id: '#{node.id}'",
+          "#{path}.id"
+        )
+      else
+        seen_ids << node.id
+      end
+
+      node.children.try &.each_with_index do |child, i|
+        validate_node(child, "#{path}.children[#{i}]", seen_ids, errors)
+      end
+    end
+
+    private def validate_edge(edge : Edge, path : String, seen_ids : Set(String),
+                              errors : Array(ValidationError))
+      if edge.id.empty?
+        errors << ValidationError.new(
+          "edge id must not be empty",
+          "#{path}.id"
+        )
+      elsif seen_ids.includes?(edge.id)
+        errors << ValidationError.new(
+          "duplicate edge id: '#{edge.id}'",
+          "#{path}.id"
+        )
+      else
+        seen_ids << edge.id
+      end
+
+      if edge.source_node_id.empty?
+        errors << ValidationError.new(
+          "edge sourceNodeId must not be empty",
+          "#{path}.sourceNodeId"
+        )
+      end
+
+      if edge.target_node_id.empty?
+        errors << ValidationError.new(
+          "edge targetNodeId must not be empty",
+          "#{path}.targetNodeId"
+        )
+      end
+    end
+
+    private def validate_reporting_configuration(config : ReportingConfiguration, path : String,
+                                                 errors : Array(ValidationError))
+      if (rank = config.rank) && (rank < 0.0 || rank > 100.0)
+        errors << ValidationError.new(
+          "rank must be between 0.0 and 100.0, got #{rank}",
+          "#{path}.rank"
+        )
+      end
+    end
+
+    private def validate_result_index_references(result : Result, path : String,
+                                                 artifact_count : Int32, logical_location_count : Int32,
+                                                 errors : Array(ValidationError))
+      # Validate artifact index references in locations
+      result.locations.try &.each_with_index do |loc, k|
+        validate_location_index_references(loc, "#{path}.locations[#{k}]", artifact_count, logical_location_count, errors)
+      end
+
+      result.related_locations.try &.each_with_index do |loc, k|
+        validate_location_index_references(loc, "#{path}.relatedLocations[#{k}]", artifact_count, logical_location_count, errors)
+      end
+
+      if target = result.analysis_target
+        validate_artifact_location_index(target, "#{path}.analysisTarget", artifact_count, errors)
+      end
+    end
+
+    private def validate_location_index_references(location : Location, path : String,
+                                                    artifact_count : Int32, logical_location_count : Int32,
+                                                    errors : Array(ValidationError))
+      if physical = location.physical_location
+        if artifact_loc = physical.artifact_location
+          validate_artifact_location_index(artifact_loc, "#{path}.physicalLocation.artifactLocation", artifact_count, errors)
+        end
+      end
+
+      location.logical_locations.try &.each_with_index do |ll, i|
+        if (idx = ll.index) && idx >= 0 && logical_location_count > 0 && idx >= logical_location_count
+          errors << ValidationError.new(
+            "logicalLocation index #{idx} is out of range (#{logical_location_count} logical locations defined)",
+            "#{path}.logicalLocations[#{i}].index"
+          )
+        end
+      end
+    end
+
+    private def validate_artifact_location_index(artifact_loc : ArtifactLocation, path : String,
+                                                  artifact_count : Int32, errors : Array(ValidationError))
+      if (idx = artifact_loc.index) && idx >= 0 && artifact_count > 0 && idx >= artifact_count
+        errors << ValidationError.new(
+          "artifact index #{idx} is out of range (#{artifact_count} artifacts defined)",
+          "#{path}.index"
+        )
+      end
+    end
+
+    private def validate_external_property_file_references(refs : ExternalPropertyFileReferences, path : String,
+                                                           errors : Array(ValidationError))
+      if ref = refs.conversion
+        validate_external_property_file_reference(ref, "#{path}.conversion", errors)
+      end
+      refs.graphs.try &.each_with_index do |ref, i|
+        validate_external_property_file_reference(ref, "#{path}.graphs[#{i}]", errors)
+      end
+      if ref = refs.externalized_properties
+        validate_external_property_file_reference(ref, "#{path}.externalizedProperties", errors)
+      end
+      refs.artifacts.try &.each_with_index do |ref, i|
+        validate_external_property_file_reference(ref, "#{path}.artifacts[#{i}]", errors)
+      end
+      refs.invocations.try &.each_with_index do |ref, i|
+        validate_external_property_file_reference(ref, "#{path}.invocations[#{i}]", errors)
+      end
+      refs.logical_locations.try &.each_with_index do |ref, i|
+        validate_external_property_file_reference(ref, "#{path}.logicalLocations[#{i}]", errors)
+      end
+      refs.thread_flow_locations.try &.each_with_index do |ref, i|
+        validate_external_property_file_reference(ref, "#{path}.threadFlowLocations[#{i}]", errors)
+      end
+      refs.results.try &.each_with_index do |ref, i|
+        validate_external_property_file_reference(ref, "#{path}.results[#{i}]", errors)
+      end
+      refs.taxonomies.try &.each_with_index do |ref, i|
+        validate_external_property_file_reference(ref, "#{path}.taxonomies[#{i}]", errors)
+      end
+      refs.addresses.try &.each_with_index do |ref, i|
+        validate_external_property_file_reference(ref, "#{path}.addresses[#{i}]", errors)
+      end
+      if ref = refs.driver
+        validate_external_property_file_reference(ref, "#{path}.driver", errors)
+      end
+      refs.extensions.try &.each_with_index do |ref, i|
+        validate_external_property_file_reference(ref, "#{path}.extensions[#{i}]", errors)
+      end
+      refs.policies.try &.each_with_index do |ref, i|
+        validate_external_property_file_reference(ref, "#{path}.policies[#{i}]", errors)
+      end
+      refs.translations.try &.each_with_index do |ref, i|
+        validate_external_property_file_reference(ref, "#{path}.translations[#{i}]", errors)
+      end
+      refs.web_requests.try &.each_with_index do |ref, i|
+        validate_external_property_file_reference(ref, "#{path}.webRequests[#{i}]", errors)
+      end
+      refs.web_responses.try &.each_with_index do |ref, i|
+        validate_external_property_file_reference(ref, "#{path}.webResponses[#{i}]", errors)
+      end
+    end
+
+    private def validate_external_property_file_reference(ref : ExternalPropertyFileReference, path : String,
+                                                          errors : Array(ValidationError))
+      if ref.location.nil? && ref.guid.nil?
+        errors << ValidationError.new(
+          "externalPropertyFileReference must have either location or guid",
+          path
+        )
+      end
+
+      validate_guid(ref.guid, "#{path}.guid", errors)
     end
 
     private def validate_array_limit(array : Array, limit : Int32?, path : String,

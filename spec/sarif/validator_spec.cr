@@ -544,4 +544,470 @@ describe Sarif::Validator do
     result.valid?.should be_false
     result.errors.any? { |e| e.path.includes?("extensions[0]") }.should be_true
   end
+
+  # "at least one of A or B" constraint validations
+
+  it "detects physicalLocation without artifactLocation or address" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+          results: [
+            Sarif::Result.new(
+              message: Sarif::Message.new(text: "issue"),
+              locations: [
+                Sarif::Location.new(
+                  physical_location: Sarif::PhysicalLocation.new
+                ),
+              ]
+            ),
+          ]
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_false
+    result.errors.any? { |e| e.message.try(&.includes?("artifactLocation or address")) }.should be_true
+  end
+
+  it "accepts physicalLocation with artifactLocation" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+          results: [
+            Sarif::Result.new(
+              message: Sarif::Message.new(text: "issue"),
+              locations: [
+                Sarif::Location.new(
+                  physical_location: Sarif::PhysicalLocation.new(
+                    artifact_location: Sarif::ArtifactLocation.new(uri: "file.cr")
+                  )
+                ),
+              ]
+            ),
+          ]
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_true
+  end
+
+  it "accepts physicalLocation with address" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+          results: [
+            Sarif::Result.new(
+              message: Sarif::Message.new(text: "issue"),
+              locations: [
+                Sarif::Location.new(
+                  physical_location: Sarif::PhysicalLocation.new(
+                    address: Sarif::Address.new(absolute_address: 0x1000_i64)
+                  )
+                ),
+              ]
+            ),
+          ]
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_true
+  end
+
+  it "detects graphTraversal without runGraphIndex or resultGraphIndex" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+          results: [
+            Sarif::Result.new(
+              message: Sarif::Message.new(text: "issue"),
+              graph_traversals: [
+                Sarif::GraphTraversal.new,
+              ]
+            ),
+          ]
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_false
+    result.errors.any? { |e| e.message.try(&.includes?("runGraphIndex or resultGraphIndex")) }.should be_true
+  end
+
+  it "accepts graphTraversal with runGraphIndex" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+          results: [
+            Sarif::Result.new(
+              message: Sarif::Message.new(text: "issue"),
+              graph_traversals: [
+                Sarif::GraphTraversal.new(run_graph_index: 0),
+              ]
+            ),
+          ]
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_true
+  end
+
+  it "detects externalPropertyFileReference without location or guid" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+          external_property_file_references: Sarif::ExternalPropertyFileReferences.new(
+            driver: Sarif::ExternalPropertyFileReference.new
+          )
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_false
+    result.errors.any? { |e| e.message.try(&.includes?("location or guid")) }.should be_true
+  end
+
+  it "accepts externalPropertyFileReference with guid" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+          external_property_file_references: Sarif::ExternalPropertyFileReferences.new(
+            driver: Sarif::ExternalPropertyFileReference.new(
+              guid: "550e8400-e29b-41d4-a716-446655440000"
+            )
+          )
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_true
+  end
+
+  # minItems / non-empty constraint validations
+
+  it "detects empty stack frames" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+          results: [
+            Sarif::Result.new(
+              message: Sarif::Message.new(text: "issue"),
+              stacks: [
+                Sarif::Stack.new(frames: [] of Sarif::StackFrame),
+              ]
+            ),
+          ]
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_false
+    result.errors.any? { |e| e.message.try(&.includes?("at least one frame")) }.should be_true
+  end
+
+  it "detects empty node id" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+          graphs: [
+            Sarif::Graph.new(nodes: [Sarif::Node.new(id: "")]),
+          ]
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_false
+    result.errors.any? { |e| e.message.try(&.includes?("node id must not be empty")) }.should be_true
+  end
+
+  it "detects empty edge id" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+          graphs: [
+            Sarif::Graph.new(edges: [Sarif::Edge.new(id: "", source_node_id: "a", target_node_id: "b")]),
+          ]
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_false
+    result.errors.any? { |e| e.message.try(&.includes?("edge id must not be empty")) }.should be_true
+  end
+
+  it "detects empty edge sourceNodeId" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+          graphs: [
+            Sarif::Graph.new(edges: [Sarif::Edge.new(id: "e1", source_node_id: "", target_node_id: "b")]),
+          ]
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_false
+    result.errors.any? { |e| e.message.try(&.includes?("sourceNodeId must not be empty")) }.should be_true
+  end
+
+  it "detects empty edge targetNodeId" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+          graphs: [
+            Sarif::Graph.new(edges: [Sarif::Edge.new(id: "e1", source_node_id: "a", target_node_id: "")]),
+          ]
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_false
+    result.errors.any? { |e| e.message.try(&.includes?("targetNodeId must not be empty")) }.should be_true
+  end
+
+  # reportingConfiguration.rank validation
+
+  it "detects reportingConfiguration rank out of range" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(
+            driver: Sarif::ToolComponent.new(
+              name: "Tool",
+              rules: [
+                Sarif::ReportingDescriptor.new(
+                  id: "R001",
+                  default_configuration: Sarif::ReportingConfiguration.new(rank: 101.0)
+                ),
+              ]
+            )
+          ),
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_false
+    result.errors.any? { |e| e.path.includes?("defaultConfiguration") && e.message.try(&.includes?("rank")) }.should be_true
+  end
+
+  it "accepts reportingConfiguration rank within range" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(
+            driver: Sarif::ToolComponent.new(
+              name: "Tool",
+              rules: [
+                Sarif::ReportingDescriptor.new(
+                  id: "R001",
+                  default_configuration: Sarif::ReportingConfiguration.new(rank: 50.0)
+                ),
+              ]
+            )
+          ),
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_true
+  end
+
+  # Graph node/edge ID uniqueness validation
+
+  it "detects duplicate node ids" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+          graphs: [
+            Sarif::Graph.new(nodes: [
+              Sarif::Node.new(id: "n1"),
+              Sarif::Node.new(id: "n1"),
+            ]),
+          ]
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_false
+    result.errors.any? { |e| e.message.try(&.includes?("duplicate node id")) }.should be_true
+  end
+
+  it "detects duplicate edge ids" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+          graphs: [
+            Sarif::Graph.new(edges: [
+              Sarif::Edge.new(id: "e1", source_node_id: "a", target_node_id: "b"),
+              Sarif::Edge.new(id: "e1", source_node_id: "c", target_node_id: "d"),
+            ]),
+          ]
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_false
+    result.errors.any? { |e| e.message.try(&.includes?("duplicate edge id")) }.should be_true
+  end
+
+  it "detects duplicate node ids in children" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+          graphs: [
+            Sarif::Graph.new(nodes: [
+              Sarif::Node.new(id: "n1", children: [
+                Sarif::Node.new(id: "n1"),
+              ]),
+            ]),
+          ]
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_false
+    result.errors.any? { |e| e.message.try(&.includes?("duplicate node id")) }.should be_true
+  end
+
+  it "accepts graph with unique ids" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+          graphs: [
+            Sarif::Graph.new(
+              nodes: [Sarif::Node.new(id: "n1"), Sarif::Node.new(id: "n2")],
+              edges: [Sarif::Edge.new(id: "e1", source_node_id: "n1", target_node_id: "n2")]
+            ),
+          ]
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_true
+  end
+
+  # Index reference validation
+
+  it "detects artifact index out of range" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+          artifacts: [
+            Sarif::Artifact.new(location: Sarif::ArtifactLocation.new(uri: "file.cr")),
+          ],
+          results: [
+            Sarif::Result.new(
+              message: Sarif::Message.new(text: "issue"),
+              locations: [
+                Sarif::Location.new(
+                  physical_location: Sarif::PhysicalLocation.new(
+                    artifact_location: Sarif::ArtifactLocation.new(uri: "file.cr", index: 5)
+                  )
+                ),
+              ]
+            ),
+          ]
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_false
+    result.errors.any? { |e| e.message.try(&.includes?("artifact index")) }.should be_true
+  end
+
+  it "detects logicalLocation index out of range" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+          logical_locations: [
+            Sarif::LogicalLocation.new(name: "func1"),
+          ],
+          results: [
+            Sarif::Result.new(
+              message: Sarif::Message.new(text: "issue"),
+              locations: [
+                Sarif::Location.new(
+                  logical_locations: [
+                    Sarif::LogicalLocation.new(name: "func2", index: 10),
+                  ]
+                ),
+              ]
+            ),
+          ]
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_false
+    result.errors.any? { |e| e.message.try(&.includes?("logicalLocation index")) }.should be_true
+  end
+
+  it "accepts valid artifact index reference" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+          artifacts: [
+            Sarif::Artifact.new(location: Sarif::ArtifactLocation.new(uri: "file.cr")),
+          ],
+          results: [
+            Sarif::Result.new(
+              message: Sarif::Message.new(text: "issue"),
+              locations: [
+                Sarif::Location.new(
+                  physical_location: Sarif::PhysicalLocation.new(
+                    artifact_location: Sarif::ArtifactLocation.new(uri: "file.cr", index: 0)
+                  )
+                ),
+              ]
+            ),
+          ]
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_true
+  end
+
+  it "detects analysisTarget artifact index out of range" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+          artifacts: [
+            Sarif::Artifact.new(location: Sarif::ArtifactLocation.new(uri: "file.cr")),
+          ],
+          results: [
+            Sarif::Result.new(
+              message: Sarif::Message.new(text: "issue"),
+              analysis_target: Sarif::ArtifactLocation.new(uri: "file.cr", index: 99)
+            ),
+          ]
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_false
+    result.errors.any? { |e| e.message.try(&.includes?("artifact index")) }.should be_true
+  end
 end
