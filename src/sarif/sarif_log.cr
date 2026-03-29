@@ -5,7 +5,7 @@ module Sarif
   SARIF_VERSION = "2.1.0"
 
   # The default JSON schema URI for SARIF 2.1.0.
-  SARIF_SCHEMA = "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/main/sarif-2.1/schema/sarif-schema-2.1.0.json"
+  SARIF_SCHEMA = "https://docs.oasis-open.org/sarif/sarif/v2.1.0/cos02/schemas/sarif-schema-2.1.0.json"
 
   # The root object of a SARIF log file.
   #
