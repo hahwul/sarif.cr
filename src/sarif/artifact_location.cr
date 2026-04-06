@@ -20,5 +20,12 @@ module Sarif
                    @index : Int32? = nil, @description : Message? = nil,
                    @properties : PropertyBag? = nil)
     end
+
+    def valid? : Bool
+      if (idx = index) && idx < -1
+        return false
+      end
+      true
+    end
   end
 end

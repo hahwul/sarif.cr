@@ -53,5 +53,16 @@ module Sarif
                    @deprecated_guids : Array(String)? = nil,
                    @properties : PropertyBag? = nil)
     end
+
+    def valid? : Bool
+      return false if id.empty?
+      if (g = guid) && !g.matches?(GUID_PATTERN)
+        return false
+      end
+      if (config = default_configuration) && (rank = config.rank) && (rank < 0.0 || rank > 100.0)
+        return false
+      end
+      true
+    end
   end
 end

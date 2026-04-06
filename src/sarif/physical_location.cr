@@ -21,5 +21,16 @@ module Sarif
                    @context_region : Region? = nil, @address : Address? = nil,
                    @properties : PropertyBag? = nil)
     end
+
+    def valid? : Bool
+      return false if artifact_location.nil? && address.nil?
+      if (r = region) && !r.valid?
+        return false
+      end
+      if (cr = context_region) && !cr.valid?
+        return false
+      end
+      true
+    end
   end
 end

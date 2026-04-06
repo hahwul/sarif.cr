@@ -1,7 +1,9 @@
 require "json"
 
 module Sarif
-  VERSION = "0.1.0"
+  VERSION = "0.2.0"
+
+  GUID_PATTERN = /\A[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\z/
 end
 
 # Errors and foundation

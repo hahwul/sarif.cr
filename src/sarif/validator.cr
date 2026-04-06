@@ -13,7 +13,7 @@ module Sarif
   # validator = Sarif::Validator.new(max_runs: 10, max_results: 1000, max_depth: 50)
   # ```
   class Validator
-    private GUID_PATTERN = /\A[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\z/
+    private GUID_PATTERN = Sarif::GUID_PATTERN
     private RFC3339_PATTERN = /\A\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})\z/
     private URI_PATTERN     = /\A[a-zA-Z][a-zA-Z0-9+\-.]*:/
 

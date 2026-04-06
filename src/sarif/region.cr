@@ -45,5 +45,27 @@ module Sarif
                    @snippet : ArtifactContent? = nil, @message : Message? = nil,
                    @source_language : String? = nil, @properties : PropertyBag? = nil)
     end
+
+    def valid? : Bool
+      if (sl = start_line) && sl < 1
+        return false
+      end
+      if (sc = start_column) && sc < 1
+        return false
+      end
+      if (el = end_line) && el < 1
+        return false
+      end
+      if (ec = end_column) && ec < 1
+        return false
+      end
+      if (sl = start_line) && (el = end_line)
+        return false if el < sl
+        if el == sl && (sc = start_column) && (ec = end_column) && ec < sc
+          return false
+        end
+      end
+      true
+    end
   end
 end

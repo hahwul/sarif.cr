@@ -53,5 +53,61 @@ describe Sarif::PhysicalLocation do
     restored.region.not_nil!.start_line.should eq(5)
     restored.context_region.not_nil!.start_line.should eq(3)
   end
+
+  it "supports address" do
+    pl = Sarif::PhysicalLocation.new(
+      address: Sarif::Address.new(absolute_address: 1024)
+    )
+    pl.address.not_nil!.absolute_address.should eq(1024)
+  end
+
+  describe "#valid?" do
+    it "returns true with artifact location" do
+      pl = Sarif::PhysicalLocation.new(
+        artifact_location: Sarif::ArtifactLocation.new(uri: "file.cr")
+      )
+      pl.valid?.should be_true
+    end
+
+    it "returns true with address" do
+      pl = Sarif::PhysicalLocation.new(
+        address: Sarif::Address.new(absolute_address: 0)
+      )
+      pl.valid?.should be_true
+    end
+
+    it "returns false without artifact location or address" do
+      pl = Sarif::PhysicalLocation.new
+      pl.valid?.should be_false
+    end
+
+    it "returns false when region is invalid" do
+      pl = Sarif::PhysicalLocation.new(
+        artifact_location: Sarif::ArtifactLocation.new(uri: "file.cr"),
+        region: Sarif::Region.new(start_line: 0)
+      )
+      pl.valid?.should be_false
+    end
+
+    it "returns false when context region is invalid" do
+      pl = Sarif::PhysicalLocation.new(
+        artifact_location: Sarif::ArtifactLocation.new(uri: "file.cr"),
+        context_region: Sarif::Region.new(start_line: 10, end_line: 5)
+      )
+      pl.valid?.should be_false
+    end
+  end
+
+  it "supports property bag" do
+    bag = Sarif::PropertyBag.new
+    bag["key"] = JSON::Any.new("value")
+    pl = Sarif::PhysicalLocation.new(
+      artifact_location: Sarif::ArtifactLocation.new(uri: "f.cr"),
+      properties: bag
+    )
+    json = pl.to_json
+    restored = Sarif::PhysicalLocation.from_json(json)
+    restored.properties.not_nil!["key"].as_s.should eq("value")
+  end
 end
 
