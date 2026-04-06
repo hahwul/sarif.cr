@@ -340,4 +340,200 @@ describe Sarif::Builder do
     result = Sarif::Validator.new.validate(log)
     result.valid?.should be_true
   end
+
+  # --- Graph builder ---
+
+  it "builds graph with nodes and edges via DSL" do
+    log = Sarif::Builder.build do |b|
+      b.run("Tool") do |r|
+        r.graph("Call graph") do |g|
+          g.node("n1", label: "main", uri: "src/main.cr", start_line: 1)
+          g.node("n2", label: "helper", uri: "src/helper.cr", start_line: 10)
+          g.edge("e1", "n1", "n2", label: "calls")
+        end
+      end
+    end
+    graphs = log.runs[0].graphs.not_nil!
+    graphs.size.should eq(1)
+    graphs[0].description.not_nil!.text.should eq("Call graph")
+    graphs[0].nodes.not_nil!.size.should eq(2)
+    graphs[0].nodes.not_nil![0].id.should eq("n1")
+    graphs[0].nodes.not_nil![0].label.not_nil!.text.should eq("main")
+    graphs[0].edges.not_nil!.size.should eq(1)
+    graphs[0].edges.not_nil![0].source_node_id.should eq("n1")
+    graphs[0].edges.not_nil![0].target_node_id.should eq("n2")
+  end
+
+  it "builds graph on result via DSL" do
+    log = Sarif::Builder.build do |b|
+      b.run("Tool") do |r|
+        r.result do |rb|
+          rb.message("Graph result")
+          rb.graph("Data flow") do |g|
+            g.node("src", label: "source")
+            g.node("sink", label: "sink")
+            g.edge("flow", "src", "sink")
+          end
+        end
+      end
+    end
+    result = log.runs[0].results.not_nil![0]
+    result.graphs.not_nil!.size.should eq(1)
+    result.graphs.not_nil![0].nodes.not_nil!.size.should eq(2)
+  end
+
+  # --- Stack builder ---
+
+  it "builds stack with frames via DSL" do
+    log = Sarif::Builder.build do |b|
+      b.run("Tool") do |r|
+        r.result do |rb|
+          rb.message("Crash detected")
+          rb.stack("Exception stack") do |s|
+            s.frame(uri: "src/main.cr", start_line: 42, module_name: "app")
+            s.frame(uri: "src/lib.cr", start_line: 10, module_name: "lib")
+          end
+        end
+      end
+    end
+    result = log.runs[0].results.not_nil![0]
+    stacks = result.stacks.not_nil!
+    stacks.size.should eq(1)
+    stacks[0].message.not_nil!.text.should eq("Exception stack")
+    stacks[0].frames.size.should eq(2)
+    stacks[0].frames[0].location.not_nil!.physical_location.not_nil!
+      .region.not_nil!.start_line.should eq(42)
+    stacks[0].frames[0].module_name.should eq("app")
+  end
+
+  # --- VersionControlDetails builder ---
+
+  it "builds version control provenance via DSL" do
+    log = Sarif::Builder.build do |b|
+      b.run("Tool") do |r|
+        r.version_control(
+          repository_uri: "https://github.com/example/repo",
+          revision_id: "abc123",
+          branch: "main",
+          mapped_to: "/"
+        )
+      end
+    end
+    vcp = log.runs[0].version_control_provenance.not_nil!
+    vcp.size.should eq(1)
+    vcp[0].repository_uri.should eq("https://github.com/example/repo")
+    vcp[0].revision_id.should eq("abc123")
+    vcp[0].branch.should eq("main")
+    vcp[0].mapped_to.not_nil!.uri.should eq("/")
+  end
+
+  it "builds multiple version control entries" do
+    log = Sarif::Builder.build do |b|
+      b.run("Tool") do |r|
+        r.version_control(repository_uri: "https://github.com/a/repo", branch: "main")
+        r.version_control(repository_uri: "https://github.com/b/repo", revision_tag: "v1.0")
+      end
+    end
+    vcp = log.runs[0].version_control_provenance.not_nil!
+    vcp.size.should eq(2)
+    vcp[1].revision_tag.should eq("v1.0")
+  end
+
+  # --- WebRequest/WebResponse builder ---
+
+  it "builds web request on result via DSL" do
+    log = Sarif::Builder.build do |b|
+      b.run("Tool") do |r|
+        r.result do |rb|
+          rb.message("HTTP issue")
+          rb.web_request(
+            target: "/api/users",
+            method: "POST",
+            protocol: "HTTP",
+            version: "1.1",
+            headers: {"Content-Type" => "application/json"},
+            body: "{\"name\": \"test\"}"
+          )
+        end
+      end
+    end
+    result = log.runs[0].results.not_nil![0]
+    req = result.web_request.not_nil!
+    req.target.should eq("/api/users")
+    req.method.should eq("POST")
+    req.protocol.should eq("HTTP")
+    req.version.should eq("1.1")
+    req.headers.not_nil!["Content-Type"].should eq("application/json")
+    req.body.not_nil!.text.should eq("{\"name\": \"test\"}")
+  end
+
+  it "builds web response on result via DSL" do
+    log = Sarif::Builder.build do |b|
+      b.run("Tool") do |r|
+        r.result do |rb|
+          rb.message("HTTP issue")
+          rb.web_response(
+            status_code: 500,
+            reason_phrase: "Internal Server Error",
+            headers: {"Content-Type" => "text/plain"},
+            body: "Error occurred"
+          )
+        end
+      end
+    end
+    result = log.runs[0].results.not_nil![0]
+    resp = result.web_response.not_nil!
+    resp.status_code.should eq(500)
+    resp.reason_phrase.should eq("Internal Server Error")
+    resp.headers.not_nil!["Content-Type"].should eq("text/plain")
+    resp.body.not_nil!.text.should eq("Error occurred")
+  end
+
+  it "builds result with both web request and response" do
+    log = Sarif::Builder.build do |b|
+      b.run("Scanner") do |r|
+        r.result do |rb|
+          rb.message("XSS vulnerability")
+          rb.web_request(target: "/search?q=<script>", method: "GET")
+          rb.web_response(status_code: 200, body: "<script>alert(1)</script>")
+        end
+      end
+    end
+    result = log.runs[0].results.not_nil![0]
+    result.web_request.not_nil!.target.should eq("/search?q=<script>")
+    result.web_response.not_nil!.status_code.should eq(200)
+  end
+
+  # --- Comprehensive builder + validator integration ---
+
+  it "builds complex log that passes validation" do
+    log = Sarif::Builder.build do |b|
+      b.run("SecurityScanner", "2.0") do |r|
+        r.version_control(
+          repository_uri: "https://github.com/example/repo",
+          revision_id: "abc123", branch: "main"
+        )
+        r.rule("SEC001", name: "XSS", short_description: "Cross-site scripting")
+        r.graph("Call graph") do |g|
+          g.node("entry", label: "entry point")
+          g.node("sink", label: "sink")
+          g.edge("flow", "entry", "sink")
+        end
+        r.result do |rb|
+          rb.message("XSS found")
+          rb.rule_id("SEC001")
+          rb.level(Sarif::Level::Error)
+          rb.location(uri: "src/web.cr", start_line: 42)
+          rb.stack do |s|
+            s.frame(uri: "src/web.cr", start_line: 42)
+            s.frame(uri: "src/app.cr", start_line: 10)
+          end
+          rb.web_request(target: "/api", method: "GET")
+          rb.web_response(status_code: 200)
+        end
+      end
+    end
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_true
+  end
 end

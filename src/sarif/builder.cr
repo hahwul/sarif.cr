@@ -63,6 +63,8 @@ module Sarif
     @results = [] of Result
     @artifacts = [] of Artifact
     @invocations = [] of Invocation
+    @graphs = [] of Graph
+    @version_control_provenance = [] of VersionControlDetails
     @information_uri : String? = nil
 
     def initialize(@name : String, @version : String? = nil)
@@ -129,6 +131,25 @@ module Sarif
       self
     end
 
+    def graph(description : String? = nil, & : GraphBuilder ->) : self
+      builder = GraphBuilder.new(description)
+      yield builder
+      @graphs << builder.build
+      self
+    end
+
+    def version_control(repository_uri : String, revision_id : String? = nil,
+                        branch : String? = nil, revision_tag : String? = nil,
+                        as_of_time_utc : String? = nil, mapped_to : String? = nil) : self
+      mapped = mapped_to ? ArtifactLocation.new(uri: mapped_to) : nil
+      @version_control_provenance << VersionControlDetails.new(
+        repository_uri: repository_uri, revision_id: revision_id,
+        branch: branch, revision_tag: revision_tag,
+        as_of_time_utc: as_of_time_utc, mapped_to: mapped
+      )
+      self
+    end
+
     def build : Run
       driver = ToolComponent.new(
         name: @name, version: @version, information_uri: @information_uri,
@@ -139,7 +160,9 @@ module Sarif
         tool: tool,
         results: Sarif.nil_if_empty(@results),
         artifacts: Sarif.nil_if_empty(@artifacts),
-        invocations: Sarif.nil_if_empty(@invocations)
+        invocations: Sarif.nil_if_empty(@invocations),
+        graphs: Sarif.nil_if_empty(@graphs),
+        version_control_provenance: Sarif.nil_if_empty(@version_control_provenance)
       )
     end
   end
@@ -155,8 +178,12 @@ module Sarif
     @code_flows = [] of CodeFlow
     @fixes = [] of Fix
     @suppressions = [] of Suppression
+    @stacks = [] of Stack
+    @graphs = [] of Graph
     @fingerprints : Hash(String, String)? = nil
     @partial_fingerprints : Hash(String, String)? = nil
+    @web_request : WebRequest? = nil
+    @web_response : WebResponse? = nil
 
     def message(@text : String, @markdown : String? = nil) : self
       self
@@ -222,6 +249,45 @@ module Sarif
       self
     end
 
+    def stack(message : String? = nil, & : StackBuilder ->) : self
+      builder = StackBuilder.new(message)
+      yield builder
+      @stacks << builder.build
+      self
+    end
+
+    def graph(description : String? = nil, & : GraphBuilder ->) : self
+      builder = GraphBuilder.new(description)
+      yield builder
+      @graphs << builder.build
+      self
+    end
+
+    def web_request(target : String, method : String = "GET",
+                    protocol : String? = nil, version : String? = nil,
+                    headers : Hash(String, String)? = nil,
+                    body : String? = nil) : self
+      body_content = body ? ArtifactContent.new(text: body) : nil
+      @web_request = WebRequest.new(
+        target: target, method: method, protocol: protocol,
+        version: version, headers: headers, body: body_content
+      )
+      self
+    end
+
+    def web_response(status_code : Int32, reason_phrase : String? = nil,
+                     protocol : String? = nil, version : String? = nil,
+                     headers : Hash(String, String)? = nil,
+                     body : String? = nil) : self
+      body_content = body ? ArtifactContent.new(text: body) : nil
+      @web_response = WebResponse.new(
+        status_code: status_code, reason_phrase: reason_phrase,
+        protocol: protocol, version: version,
+        headers: headers, body: body_content
+      )
+      self
+    end
+
     def fingerprint(key : String, value : String) : self
       fp = @fingerprints ||= {} of String => String
       fp[key] = value
@@ -244,8 +310,12 @@ module Sarif
         code_flows: Sarif.nil_if_empty(@code_flows),
         fixes: Sarif.nil_if_empty(@fixes),
         suppressions: Sarif.nil_if_empty(@suppressions),
+        stacks: Sarif.nil_if_empty(@stacks),
+        graphs: Sarif.nil_if_empty(@graphs),
         fingerprints: @fingerprints,
-        partial_fingerprints: @partial_fingerprints
+        partial_fingerprints: @partial_fingerprints,
+        web_request: @web_request,
+        web_response: @web_response
       )
     end
   end
@@ -346,6 +416,62 @@ module Sarif
         artifact_location: ArtifactLocation.new(uri: @uri),
         replacements: @replacements
       )
+    end
+  end
+
+  class GraphBuilder
+    @description : String?
+    @nodes = [] of Node
+    @edges = [] of Edge
+
+    def initialize(@description : String? = nil)
+    end
+
+    def node(id : String, label : String? = nil, uri : String? = nil,
+             start_line : Int32? = nil) : self
+      loc = (uri || start_line) ? Sarif.build_location(uri: uri, start_line: start_line) : nil
+      lbl = label ? Message.new(text: label) : nil
+      @nodes << Node.new(id: id, label: lbl, location: loc)
+      self
+    end
+
+    def edge(id : String, source_node_id : String, target_node_id : String,
+             label : String? = nil) : self
+      lbl = label ? Message.new(text: label) : nil
+      @edges << Edge.new(id: id, source_node_id: source_node_id,
+        target_node_id: target_node_id, label: lbl)
+      self
+    end
+
+    def build : Graph
+      desc = @description ? Message.new(text: @description) : nil
+      Graph.new(
+        description: desc,
+        nodes: Sarif.nil_if_empty(@nodes),
+        edges: Sarif.nil_if_empty(@edges)
+      )
+    end
+  end
+
+  class StackBuilder
+    @message : String?
+    @frames = [] of StackFrame
+
+    def initialize(@message : String? = nil)
+    end
+
+    def frame(uri : String? = nil, start_line : Int32? = nil,
+              module_name : String? = nil, thread_id : Int32? = nil,
+              parameters : Array(String)? = nil) : self
+      loc = (uri || start_line) ? Sarif.build_location(uri: uri, start_line: start_line) : nil
+      @frames << StackFrame.new(location: loc, module_name: module_name,
+        thread_id: thread_id, parameters: parameters)
+      self
+    end
+
+    def build : Stack
+      msg = @message ? Message.new(text: @message) : nil
+      Stack.new(frames: @frames, message: msg)
     end
   end
 end

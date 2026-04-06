@@ -1010,4 +1010,346 @@ describe Sarif::Validator do
     result.valid?.should be_false
     result.errors.any? { |e| e.message.try(&.includes?("artifact index")) }.should be_true
   end
+
+  # --- Rule ID uniqueness ---
+
+  it "detects duplicate rule IDs within driver.rules" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(
+            name: "Tool",
+            rules: [
+              Sarif::ReportingDescriptor.new(id: "R001"),
+              Sarif::ReportingDescriptor.new(id: "R002"),
+              Sarif::ReportingDescriptor.new(id: "R001"),
+            ]
+          ))
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_false
+    result.errors.any? { |e| e.message.try(&.includes?("duplicate descriptor id: 'R001'")) }.should be_true
+  end
+
+  it "allows unique rule IDs" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(
+            name: "Tool",
+            rules: [
+              Sarif::ReportingDescriptor.new(id: "R001"),
+              Sarif::ReportingDescriptor.new(id: "R002"),
+              Sarif::ReportingDescriptor.new(id: "R003"),
+            ]
+          ))
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_true
+  end
+
+  it "detects duplicate notification IDs" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(
+            name: "Tool",
+            notifications: [
+              Sarif::ReportingDescriptor.new(id: "N001"),
+              Sarif::ReportingDescriptor.new(id: "N001"),
+            ]
+          ))
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_false
+    result.errors.any? { |e| e.message.try(&.includes?("duplicate descriptor id")) }.should be_true
+  end
+
+  # --- Edge→Node reference integrity ---
+
+  it "detects edge referencing unknown source node" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+          graphs: [
+            Sarif::Graph.new(
+              nodes: [Sarif::Node.new(id: "n1"), Sarif::Node.new(id: "n2")],
+              edges: [Sarif::Edge.new(id: "e1", source_node_id: "n999", target_node_id: "n2")]
+            ),
+          ]
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_false
+    result.errors.any? { |e| e.message.try(&.includes?("sourceNodeId 'n999' references unknown node")) }.should be_true
+  end
+
+  it "detects edge referencing unknown target node" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+          graphs: [
+            Sarif::Graph.new(
+              nodes: [Sarif::Node.new(id: "n1")],
+              edges: [Sarif::Edge.new(id: "e1", source_node_id: "n1", target_node_id: "n_missing")]
+            ),
+          ]
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_false
+    result.errors.any? { |e| e.message.try(&.includes?("targetNodeId 'n_missing' references unknown node")) }.should be_true
+  end
+
+  it "allows edges referencing valid nodes" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+          graphs: [
+            Sarif::Graph.new(
+              nodes: [Sarif::Node.new(id: "n1"), Sarif::Node.new(id: "n2")],
+              edges: [Sarif::Edge.new(id: "e1", source_node_id: "n1", target_node_id: "n2")]
+            ),
+          ]
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_true
+  end
+
+  # --- Artifact parentIndex bounds ---
+
+  it "detects artifact parentIndex out of range" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+          artifacts: [
+            Sarif::Artifact.new(location: Sarif::ArtifactLocation.new(uri: "dir/")),
+            Sarif::Artifact.new(
+              location: Sarif::ArtifactLocation.new(uri: "dir/file.cr"),
+              parent_index: 99
+            ),
+          ]
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_false
+    result.errors.any? { |e| e.message.try(&.includes?("parentIndex")) }.should be_true
+  end
+
+  it "detects negative artifact parentIndex" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+          artifacts: [
+            Sarif::Artifact.new(
+              location: Sarif::ArtifactLocation.new(uri: "file.cr"),
+              parent_index: -1
+            ),
+          ]
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_false
+    result.errors.any? { |e| e.message.try(&.includes?("parentIndex")) }.should be_true
+  end
+
+  it "allows valid artifact parentIndex" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+          artifacts: [
+            Sarif::Artifact.new(location: Sarif::ArtifactLocation.new(uri: "dir/")),
+            Sarif::Artifact.new(
+              location: Sarif::ArtifactLocation.new(uri: "dir/file.cr"),
+              parent_index: 0
+            ),
+          ]
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_true
+  end
+
+  # --- ResultProvenance time ordering ---
+
+  it "detects provenance lastDetectionTimeUtc before firstDetectionTimeUtc" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+          results: [
+            Sarif::Result.new(
+              message: Sarif::Message.new(text: "issue"),
+              provenance: Sarif::ResultProvenance.new(
+                first_detection_time_utc: "2024-06-01T00:00:00Z",
+                last_detection_time_utc: "2024-01-01T00:00:00Z"
+              )
+            ),
+          ]
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_false
+    result.errors.any? { |e| e.message.try(&.includes?("lastDetectionTimeUtc must not be before")) }.should be_true
+  end
+
+  it "allows valid provenance time ordering" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+          results: [
+            Sarif::Result.new(
+              message: Sarif::Message.new(text: "issue"),
+              provenance: Sarif::ResultProvenance.new(
+                first_detection_time_utc: "2024-01-01T00:00:00Z",
+                last_detection_time_utc: "2024-06-01T00:00:00Z"
+              )
+            ),
+          ]
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_true
+  end
+
+  it "validates provenance GUID format" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+          results: [
+            Sarif::Result.new(
+              message: Sarif::Message.new(text: "issue"),
+              provenance: Sarif::ResultProvenance.new(
+                first_detection_run_guid: "not-a-guid"
+              )
+            ),
+          ]
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_false
+    result.errors.any? { |e| e.message.try(&.includes?("Invalid GUID format")) }.should be_true
+  end
+
+  # --- Exception depth protection ---
+
+  it "limits exception innerExceptions depth" do
+    # Build deeply nested exceptions
+    inner = Sarif::SarifException.new(kind: "deepest", message: "bottom")
+    150.times do
+      inner = Sarif::SarifException.new(kind: "wrapper", inner_exceptions: [inner])
+    end
+
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+          invocations: [
+            Sarif::Invocation.new(
+              execution_successful: false,
+              tool_execution_notifications: [
+                Sarif::Notification.new(
+                  message: Sarif::Message.new(text: "error"),
+                  sarif_exception: inner
+                ),
+              ]
+            ),
+          ]
+        ),
+      ]
+    )
+    result = Sarif::Validator.new(max_depth: 10).validate(log)
+    result.valid?.should be_false
+    result.errors.any? { |e| e.message.try(&.includes?("exceeds maximum allowed depth")) }.should be_true
+  end
+
+  # --- Self-referencing parentIndex ---
+
+  it "detects artifact with self-referencing parentIndex" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+          artifacts: [
+            Sarif::Artifact.new(
+              location: Sarif::ArtifactLocation.new(uri: "file.cr"),
+              parent_index: 0
+            ),
+          ]
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_false
+    result.errors.any? { |e| e.message.try(&.includes?("parentIndex")) }.should be_true
+  end
+
+  # --- Edge validation with edges-only graph ---
+
+  it "allows edges-only graph without nodes" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+          graphs: [
+            Sarif::Graph.new(
+              edges: [Sarif::Edge.new(id: "e1", source_node_id: "n1", target_node_id: "n2")]
+            ),
+          ]
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_true
+  end
+
+  # --- Duplicate rule IDs in extensions ---
+
+  it "detects duplicate rule IDs in tool extensions" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(
+            driver: Sarif::ToolComponent.new(name: "Tool"),
+            extensions: [
+              Sarif::ToolComponent.new(
+                name: "Plugin",
+                rules: [
+                  Sarif::ReportingDescriptor.new(id: "EXT001"),
+                  Sarif::ReportingDescriptor.new(id: "EXT001"),
+                ]
+              ),
+            ]
+          )
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_false
+    result.errors.any? { |e| e.message.try(&.includes?("duplicate descriptor id: 'EXT001'")) }.should be_true
+  end
 end

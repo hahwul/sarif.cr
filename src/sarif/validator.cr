@@ -83,11 +83,11 @@ module Sarif
       end
 
       run.invocations.try &.each_with_index do |inv, j|
-        validate_invocation(inv, "#{path}.invocations[#{j}]", errors)
+        validate_invocation(inv, "#{path}.invocations[#{j}]", errors, depth: depth)
       end
 
       run.artifacts.try &.each_with_index do |artifact, j|
-        validate_artifact(artifact, "#{path}.artifacts[#{j}]", errors)
+        validate_artifact(artifact, "#{path}.artifacts[#{j}]", j, artifact_count, errors)
       end
 
       run.version_control_provenance.try &.each_with_index do |vcd, j|
@@ -122,12 +122,34 @@ module Sarif
       validate_uri(component.download_uri, "#{path}.downloadUri", errors)
       validate_uri(component.information_uri, "#{path}.informationUri", errors)
 
-      component.rules.try &.each_with_index do |rule, i|
-        validate_reporting_descriptor(rule, "#{path}.rules[#{i}]", errors)
+      if rules = component.rules
+        validate_descriptor_id_uniqueness(rules, "#{path}.rules", errors)
+        rules.each_with_index do |rule, i|
+          validate_reporting_descriptor(rule, "#{path}.rules[#{i}]", errors)
+        end
       end
 
-      component.notifications.try &.each_with_index do |notif, i|
-        validate_reporting_descriptor(notif, "#{path}.notifications[#{i}]", errors)
+      if notifs = component.notifications
+        validate_descriptor_id_uniqueness(notifs, "#{path}.notifications", errors)
+        notifs.each_with_index do |notif, i|
+          validate_reporting_descriptor(notif, "#{path}.notifications[#{i}]", errors)
+        end
+      end
+    end
+
+    private def validate_descriptor_id_uniqueness(descriptors : Array(ReportingDescriptor), path : String,
+                                                   errors : Array(ValidationError))
+      seen_ids = Set(String).new
+      descriptors.each_with_index do |desc, i|
+        next if desc.id.empty?
+        if seen_ids.includes?(desc.id)
+          errors << ValidationError.new(
+            "duplicate descriptor id: '#{desc.id}'",
+            "#{path}[#{i}].id"
+          )
+        else
+          seen_ids << desc.id
+        end
       end
     end
 
@@ -214,9 +236,44 @@ module Sarif
       result.fixes.try &.each_with_index do |fix, k|
         validate_fix(fix, "#{path}.fixes[#{k}]", errors)
       end
+
+      if provenance = result.provenance
+        validate_result_provenance(provenance, "#{path}.provenance", errors)
+      end
     end
 
-    private def validate_invocation(inv : Invocation, path : String, errors : Array(ValidationError))
+    private def validate_result_provenance(provenance : ResultProvenance, path : String,
+                                            errors : Array(ValidationError))
+      validate_timestamp(provenance.first_detection_time_utc, "#{path}.firstDetectionTimeUtc", errors)
+      validate_timestamp(provenance.last_detection_time_utc, "#{path}.lastDetectionTimeUtc", errors)
+      validate_guid(provenance.first_detection_run_guid, "#{path}.firstDetectionRunGuid", errors)
+      validate_guid(provenance.last_detection_run_guid, "#{path}.lastDetectionRunGuid", errors)
+
+      if (first = provenance.first_detection_time_utc) && (last = provenance.last_detection_time_utc)
+        if first > last
+          errors << ValidationError.new(
+            "lastDetectionTimeUtc must not be before firstDetectionTimeUtc",
+            "#{path}.lastDetectionTimeUtc"
+          )
+        end
+      end
+    end
+
+    private def validate_exception(exception : SarifException, path : String,
+                                    errors : Array(ValidationError), *, depth : Int32)
+      return unless check_depth!(path, depth, errors)
+
+      if ex_stack = exception.stack
+        validate_stack(ex_stack, "#{path}.stack", errors)
+      end
+
+      exception.inner_exceptions.try &.each_with_index do |inner, i|
+        validate_exception(inner, "#{path}.innerExceptions[#{i}]", errors, depth: depth + 1)
+      end
+    end
+
+    private def validate_invocation(inv : Invocation, path : String,
+                                    errors : Array(ValidationError), *, depth : Int32)
       validate_timestamp(inv.start_time_utc, "#{path}.startTimeUtc", errors)
       validate_timestamp(inv.end_time_utc, "#{path}.endTimeUtc", errors)
 
@@ -228,13 +285,34 @@ module Sarif
           )
         end
       end
+
+      inv.tool_execution_notifications.try &.each_with_index do |notif, i|
+        if ex = notif.sarif_exception
+          validate_exception(ex, "#{path}.toolExecutionNotifications[#{i}].exception", errors, depth: depth + 1)
+        end
+      end
+
+      inv.tool_configuration_notifications.try &.each_with_index do |notif, i|
+        if ex = notif.sarif_exception
+          validate_exception(ex, "#{path}.toolConfigurationNotifications[#{i}].exception", errors, depth: depth + 1)
+        end
+      end
     end
 
-    private def validate_artifact(artifact : Artifact, path : String, errors : Array(ValidationError))
+    private def validate_artifact(artifact : Artifact, path : String,
+                                   artifact_index : Int32, artifact_count : Int32,
+                                   errors : Array(ValidationError))
       if (length = artifact.length) && length < -1
         errors << ValidationError.new(
           "artifact length must be >= -1, got #{length}",
           "#{path}.length"
+        )
+      end
+
+      if (pi = artifact.parent_index) && artifact_count > 0 && (pi < 0 || pi >= artifact_count || pi == artifact_index)
+        errors << ValidationError.new(
+          "artifact parentIndex #{pi} is out of range (#{artifact_count} artifacts defined)",
+          "#{path}.parentIndex"
         )
       end
 
@@ -409,8 +487,8 @@ module Sarif
 
     private def validate_graph(graph : Graph, path : String,
                                errors : Array(ValidationError))
+      node_ids = Set(String).new
       if nodes = graph.nodes
-        node_ids = Set(String).new
         nodes.each_with_index do |node, i|
           validate_node(node, "#{path}.nodes[#{i}]", node_ids, errors)
         end
@@ -419,7 +497,7 @@ module Sarif
       if edges = graph.edges
         edge_ids = Set(String).new
         edges.each_with_index do |edge, i|
-          validate_edge(edge, "#{path}.edges[#{i}]", edge_ids, errors)
+          validate_edge(edge, "#{path}.edges[#{i}]", edge_ids, node_ids, errors)
         end
       end
     end
@@ -446,7 +524,7 @@ module Sarif
     end
 
     private def validate_edge(edge : Edge, path : String, seen_ids : Set(String),
-                              errors : Array(ValidationError))
+                              node_ids : Set(String), errors : Array(ValidationError))
       if edge.id.empty?
         errors << ValidationError.new(
           "edge id must not be empty",
@@ -466,11 +544,21 @@ module Sarif
           "edge sourceNodeId must not be empty",
           "#{path}.sourceNodeId"
         )
+      elsif !node_ids.empty? && !node_ids.includes?(edge.source_node_id)
+        errors << ValidationError.new(
+          "edge sourceNodeId '#{edge.source_node_id}' references unknown node",
+          "#{path}.sourceNodeId"
+        )
       end
 
       if edge.target_node_id.empty?
         errors << ValidationError.new(
           "edge targetNodeId must not be empty",
+          "#{path}.targetNodeId"
+        )
+      elsif !node_ids.empty? && !node_ids.includes?(edge.target_node_id)
+        errors << ValidationError.new(
+          "edge targetNodeId '#{edge.target_node_id}' references unknown node",
           "#{path}.targetNodeId"
         )
       end
