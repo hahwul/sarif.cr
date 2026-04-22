@@ -4,7 +4,7 @@ This document provides instructions for AI agents working on the sarif.cr docume
 
 ## Project Overview
 
-This is the documentation site for [sarif.cr](https://github.com/hahwul/sarif), a Crystal implementation of the SARIF 2.1.0 specification. The site is built with [Hwaro](https://github.com/hahwul/hwaro), a static site generator written in Crystal.
+This is the documentation site for [sarif.cr](https://github.com/hahwul/sarif.cr), a Crystal implementation of the SARIF 2.1.0 specification. The site is built with [Hwaro](https://github.com/hahwul/hwaro), a static site generator written in Crystal.
 
 ## Site Structure
 
