@@ -731,6 +731,29 @@ describe Sarif::Validator do
     result.errors.any? { |e| e.message.try(&.includes?("node id must not be empty")) }.should be_true
   end
 
+  it "caps validate_node recursion at max_depth instead of overflowing the stack" do
+    # Build a deeply nested chain of children. With no depth check the
+    # validator would recurse `depth` levels and crash on a hostile SARIF.
+    depth = 50
+    leaf = Sarif::Node.new(id: "leaf")
+    chain = (0...depth).reverse_each.reduce(leaf) do |child, i|
+      Sarif::Node.new(id: "n#{i}", children: [child])
+    end
+
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+          graphs: [Sarif::Graph.new(nodes: [chain])]
+        ),
+      ]
+    )
+
+    result = Sarif::Validator.new(max_depth: 10).validate(log)
+    result.valid?.should be_false
+    result.errors.any? { |e| e.message.try(&.includes?("exceeds maximum allowed depth")) }.should be_true
+  end
+
   it "detects empty edge id" do
     log = Sarif::SarifLog.new(
       runs: [
