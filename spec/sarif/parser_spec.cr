@@ -228,6 +228,20 @@ describe "Sarif.parse with max_size" do
       tmp.delete
     end
   end
+
+  it "exposes a documented DEFAULT_MAX_SIZE for callers parsing untrusted input" do
+    Sarif::DEFAULT_MAX_SIZE.should be > 0
+    json = %({
+      "version": "2.1.0",
+      "runs": [{
+        "tool": { "driver": { "name": "Tool" } }
+      }]
+    })
+    # The constant is meant to be opt-in: a caller passing it should still
+    # be able to parse legitimate SARIF that's well under the cap.
+    log = Sarif.parse(json, max_size: Sarif::DEFAULT_MAX_SIZE)
+    log.runs[0].tool.driver.name.should eq("Tool")
+  end
 end
 
 describe "Sarif.from_file with file errors" do

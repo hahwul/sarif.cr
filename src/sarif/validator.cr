@@ -490,7 +490,7 @@ module Sarif
       node_ids = Set(String).new
       if nodes = graph.nodes
         nodes.each_with_index do |node, i|
-          validate_node(node, "#{path}.nodes[#{i}]", node_ids, errors)
+          validate_node(node, "#{path}.nodes[#{i}]", node_ids, errors, depth: 1)
         end
       end
 
@@ -503,7 +503,11 @@ module Sarif
     end
 
     private def validate_node(node : Node, path : String, seen_ids : Set(String),
-                              errors : Array(ValidationError))
+                              errors : Array(ValidationError), *, depth : Int32)
+      # Bound recursion through node.children so a malformed SARIF graph
+      # with arbitrarily deep child chains can't blow the call stack.
+      return unless check_depth!(path, depth, errors)
+
       if node.id.empty?
         errors << ValidationError.new(
           "node id must not be empty",
@@ -519,7 +523,7 @@ module Sarif
       end
 
       node.children.try &.each_with_index do |child, i|
-        validate_node(child, "#{path}.children[#{i}]", seen_ids, errors)
+        validate_node(child, "#{path}.children[#{i}]", seen_ids, errors, depth: depth + 1)
       end
     end
 

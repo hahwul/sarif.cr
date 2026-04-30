@@ -1,7 +1,19 @@
 module Sarif
+  # A conservative byte cap that callers parsing SARIF from an untrusted
+  # source SHOULD pass via `max_size:`. 256 MiB is large enough for any
+  # realistic enterprise SBOM/SARIF artifact while still bounding total
+  # memory if a producer (or a hostile fixture) streams an unbounded
+  # JSON document. The library does not apply this cap by default to
+  # avoid surprising callers that legitimately ingest very large reports.
+  DEFAULT_MAX_SIZE = 256_i64 * 1024 * 1024
+
   # Parses a SARIF JSON string into a `SarifLog`.
   # Pass `max_size` to reject inputs exceeding the byte limit.
   # Raises `Sarif::Error` on invalid JSON or size limit violations.
+  #
+  # Security: when parsing input from an untrusted producer, pass
+  # `max_size: Sarif::DEFAULT_MAX_SIZE` (or a tighter cap) so a hostile
+  # report cannot exhaust memory.
   def self.parse(json : String, *, max_size : Int64? = nil) : SarifLog
     check_size!(json.bytesize.to_i64, max_size, "Input")
     parse_json(json)
@@ -11,6 +23,12 @@ module Sarif
     raise Error.new("Failed to parse SARIF JSON: #{ex.message}")
   end
 
+  # Streams and parses a SARIF JSON document from the given IO.
+  #
+  # Security: with the default `max_size: nil` the IO is consumed
+  # straight into `SarifLog.from_json` with no byte cap; callers that
+  # cannot trust the producer SHOULD pass `max_size: Sarif::DEFAULT_MAX_SIZE`
+  # so the IO is read into a buffer and rejected past the cap.
   def self.parse(io : IO, *, max_size : Int64? = nil) : SarifLog
     if max_size
       json = io.gets_to_end
@@ -27,6 +45,10 @@ module Sarif
 
   # Reads and parses a SARIF file from the given path.
   # Raises `Sarif::Error` if the file cannot be read or contains invalid JSON.
+  #
+  # Security: the file size check is opt-in. When parsing files produced
+  # outside the caller's trust boundary (e.g. CI artifacts uploaded by
+  # third parties), pass `max_size: Sarif::DEFAULT_MAX_SIZE`.
   def self.from_file(path : String, *, max_size : Int64? = nil) : SarifLog
     if max_size
       check_size!(File.size(path).to_i64, max_size, "File")
