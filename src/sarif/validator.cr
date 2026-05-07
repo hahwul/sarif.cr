@@ -13,7 +13,7 @@ module Sarif
   # validator = Sarif::Validator.new(max_runs: 10, max_results: 1000, max_depth: 50)
   # ```
   class Validator
-    private GUID_PATTERN = Sarif::GUID_PATTERN
+    private GUID_PATTERN    = Sarif::GUID_PATTERN
     private RFC3339_PATTERN = /\A\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})\z/
     private URI_PATTERN     = /\A[a-zA-Z][a-zA-Z0-9+\-.]*:/
 
@@ -138,7 +138,7 @@ module Sarif
     end
 
     private def validate_descriptor_id_uniqueness(descriptors : Array(ReportingDescriptor), path : String,
-                                                   errors : Array(ValidationError))
+                                                  errors : Array(ValidationError))
       seen_ids = Set(String).new
       descriptors.each_with_index do |desc, i|
         next if desc.id.empty?
@@ -243,7 +243,7 @@ module Sarif
     end
 
     private def validate_result_provenance(provenance : ResultProvenance, path : String,
-                                            errors : Array(ValidationError))
+                                           errors : Array(ValidationError))
       validate_timestamp(provenance.first_detection_time_utc, "#{path}.firstDetectionTimeUtc", errors)
       validate_timestamp(provenance.last_detection_time_utc, "#{path}.lastDetectionTimeUtc", errors)
       validate_guid(provenance.first_detection_run_guid, "#{path}.firstDetectionRunGuid", errors)
@@ -260,7 +260,7 @@ module Sarif
     end
 
     private def validate_exception(exception : SarifException, path : String,
-                                    errors : Array(ValidationError), *, depth : Int32)
+                                   errors : Array(ValidationError), *, depth : Int32)
       return unless check_depth!(path, depth, errors)
 
       if ex_stack = exception.stack
@@ -300,8 +300,8 @@ module Sarif
     end
 
     private def validate_artifact(artifact : Artifact, path : String,
-                                   artifact_index : Int32, artifact_count : Int32,
-                                   errors : Array(ValidationError))
+                                  artifact_index : Int32, artifact_count : Int32,
+                                  errors : Array(ValidationError))
       if (length = artifact.length) && length < -1
         errors << ValidationError.new(
           "artifact length must be >= -1, got #{length}",
@@ -466,7 +466,7 @@ module Sarif
     end
 
     private def validate_graph_traversal(gt : GraphTraversal, path : String,
-                                        errors : Array(ValidationError))
+                                         errors : Array(ValidationError))
       if gt.run_graph_index.nil? && gt.result_graph_index.nil?
         errors << ValidationError.new(
           "graphTraversal must have either runGraphIndex or resultGraphIndex",
@@ -596,8 +596,8 @@ module Sarif
     end
 
     private def validate_location_index_references(location : Location, path : String,
-                                                    artifact_count : Int32, logical_location_count : Int32,
-                                                    errors : Array(ValidationError))
+                                                   artifact_count : Int32, logical_location_count : Int32,
+                                                   errors : Array(ValidationError))
       if physical = location.physical_location
         if artifact_loc = physical.artifact_location
           validate_artifact_location_index(artifact_loc, "#{path}.physicalLocation.artifactLocation", artifact_count, errors)
@@ -615,7 +615,7 @@ module Sarif
     end
 
     private def validate_artifact_location_index(artifact_loc : ArtifactLocation, path : String,
-                                                  artifact_count : Int32, errors : Array(ValidationError))
+                                                 artifact_count : Int32, errors : Array(ValidationError))
       if (idx = artifact_loc.index) && idx >= 0 && artifact_count > 0 && idx >= artifact_count
         errors << ValidationError.new(
           "artifact index #{idx} is out of range (#{artifact_count} artifacts defined)",

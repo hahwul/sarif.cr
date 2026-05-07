@@ -110,4 +110,3 @@ describe Sarif::PhysicalLocation do
     restored.properties.not_nil!["key"].as_s.should eq("value")
   end
 end
-
