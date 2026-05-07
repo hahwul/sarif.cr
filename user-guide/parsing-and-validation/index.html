@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Read existing SARIF files and validate them against the specification.">
+  <title>Parsing & Validation - sarif.cr</title>
+  <meta property="og:title" content="Parsing &amp; Validation">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://sarif.cr.hahwul.com/user-guide/parsing-and-validation/">
+<meta property="og:description" content="Read existing SARIF files and validate them against the specification.">
+<meta property="og:image" content="https://sarif.cr.hahwul.com/og-images/user-guide-parsing-and-validation.svg">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Parsing &amp; Validation">
+<meta name="twitter:description" content="Read existing SARIF files and validate them against the specification.">
+<meta name="twitter:image" content="https://sarif.cr.hahwul.com/og-images/user-guide-parsing-and-validation.svg">
+  <link rel="stylesheet" href="https://sarif.cr.hahwul.com/css/style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+  
+</head>
+<body data-section="user-guide">
+<header class="docs-header">
+  <a href="https://sarif.cr.hahwul.com/" class="logo">sarif.cr Documentation</a>
+  <nav>
+    <a href="https://sarif.cr.hahwul.com/user-guide/">User Guide</a>
+    <a href="https://sarif.cr.hahwul.com/api-reference/">API Reference</a>
+  </nav>
+  <div class="header-right">
+    <a href="https://github.com/hahwul/sarif.cr" target="_blank">GitHub</a>
+  </div>
+</header>
+<div class="docs-container">
+  <aside class="docs-sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-title">User Guide</div>
+      <ul class="sidebar-links">
+        <li><a href="https://sarif.cr.hahwul.com/user-guide/getting-started/">Getting Started</a></li>
+        <li><a href="https://sarif.cr.hahwul.com/user-guide/basic-usage/">Basic Usage</a></li>
+        <li><a href="https://sarif.cr.hahwul.com/user-guide/builder/">Builder</a></li>
+        <li><a href="https://sarif.cr.hahwul.com/user-guide/parsing-and-validation/">Parsing & Validation</a></li>
+      </ul>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-title">API Reference</div>
+      <ul class="sidebar-links">
+        <li><a href="https://sarif.cr.hahwul.com/api-reference/sarif-log/">SarifLog</a></li>
+        <li><a href="https://sarif.cr.hahwul.com/api-reference/run/">Run</a></li>
+        <li><a href="https://sarif.cr.hahwul.com/api-reference/result/">Result</a></li>
+        <li><a href="https://sarif.cr.hahwul.com/api-reference/tool/">Tool</a></li>
+        <li><a href="https://sarif.cr.hahwul.com/api-reference/location/">Location</a></li>
+        <li><a href="https://sarif.cr.hahwul.com/api-reference/enums/">Enums</a></li>
+      </ul>
+    </div>
+  </aside>
+  <main class="docs-main">
+    <h1>Parsing & Validation</h1>
+    <p>sarif.cr can read existing SARIF JSON and validate documents against the specification.</p>
+<h2 id="parsing-sarif-json">Parsing SARIF JSON</h2>
+<p>Parse a JSON string into a <code>SarifLog</code>:</p>
+<pre><code class="language-crystal hljs">json = File.read(&quot;results.sarif&quot;)
+log = Sarif.parse(json)
+
+log.runs.each do |run|
+  puts &quot;Tool: #{run.tool.driver.name}&quot;
+  run.results.try &amp;.each do |result|
+    puts &quot;  #{result.level}: #{result.message.text}&quot;
+  end
+end
+</code></pre>
+<h2 id="reading-from-a-file">Reading from a File</h2>
+<p>Use the convenience method to read and parse in one step:</p>
+<pre><code class="language-crystal hljs">log = Sarif.from_file(&quot;results.sarif&quot;)
+</code></pre>
+<h2 id="parsing-with-validation">Parsing with Validation</h2>
+<p>Use <code>parse!</code> or <code>from_file!</code> to parse and validate in one step. These raise an exception if validation fails:</p>
+<pre><code class="language-crystal hljs">begin
+  log = Sarif.parse!(json)
+rescue ex
+  puts &quot;Invalid SARIF: #{ex.message}&quot;
+end
+</code></pre>
+<pre><code class="language-crystal hljs">begin
+  log = Sarif.from_file!(&quot;results.sarif&quot;)
+rescue ex
+  puts &quot;Invalid SARIF: #{ex.message}&quot;
+end
+</code></pre>
+<h2 id="manual-validation">Manual Validation</h2>
+<p>Run validation separately using <code>Sarif::Validator</code>:</p>
+<pre><code class="language-crystal hljs">log = Sarif.parse(json)
+result = Sarif::Validator.new.validate(log)
+
+if result.valid?
+  puts &quot;Valid SARIF document&quot;
+else
+  result.errors.each do |error|
+    puts &quot;#{error.path}: #{error.message}&quot;
+  end
+end
+</code></pre>
+<h2 id="validator-options">Validator Options</h2>
+<p>The validator accepts options to prevent resource exhaustion (DoS protection):</p>
+<pre><code class="language-crystal hljs">validator = Sarif::Validator.new(
+  max_runs: 10,       # maximum number of runs allowed
+  max_results: 5000,  # maximum results per run
+  max_depth: 50       # maximum nesting depth (default: 100)
+)
+
+result = validator.validate(log)
+</code></pre>
+<p>The parser also supports a <code>max_size</code> option to reject oversized inputs before JSON parsing:</p>
+<pre><code class="language-crystal hljs">log = Sarif.parse(json, max_size: 10_000_000)          # 10 MB limit
+log = Sarif.from_file(&quot;results.sarif&quot;, max_size: 10_000_000)
+</code></pre>
+<h2 id="validation-checks">Validation Checks</h2>
+<p>The validator checks for:</p>
+<ul>
+<li><strong>Version</strong> -- Must be <code>&quot;2.1.0&quot;</code></li>
+<li><strong>Tool driver name</strong> -- Must not be empty</li>
+<li><strong>Result message</strong> -- Must have either <code>text</code> or <code>id</code></li>
+<li><strong>Rule index</strong> -- <code>ruleIndex</code> must reference a valid rule in the driver</li>
+<li><strong>Rule ID consistency</strong> -- <code>ruleId</code> must match the rule at <code>ruleIndex</code></li>
+<li><strong>GUID format</strong> -- Must be valid UUID</li>
+<li><strong>Timestamp format</strong> -- Must be RFC 3339</li>
+<li><strong>URI format</strong> -- Must be absolute URI</li>
+<li><strong>Result rank</strong> -- Must be 0.0–100.0</li>
+<li><strong>Occurrence count</strong> -- Must be &gt;= 1</li>
+<li><strong>Code flow</strong> -- Must have at least one thread flow</li>
+<li><strong>Thread flow</strong> -- Must have at least one location</li>
+<li><strong>Fix</strong> -- Must have at least one artifact change</li>
+<li><strong>Artifact change</strong> -- Must have at least one replacement</li>
+<li><strong>Artifact length</strong> -- Must be &gt;= -1</li>
+<li><strong>Invocation time</strong> -- <code>endTimeUtc</code> must be &gt;= <code>startTimeUtc</code></li>
+<li><strong>Nesting depth</strong> -- Must not exceed <code>max_depth</code></li>
+</ul>
+<h2 id="working-with-parsed-data">Working with Parsed Data</h2>
+<p>After parsing, you can navigate the full object graph:</p>
+<pre><code class="language-crystal hljs">log = Sarif.from_file(&quot;eslint-results.sarif&quot;)
+run = log.runs[0]
+
+# Access tool info
+puts run.tool.driver.name      # =&gt; &quot;ESLint&quot;
+puts run.tool.driver.version   # =&gt; &quot;8.0.0&quot;
+
+# Access rules
+run.tool.driver.rules.try &amp;.each do |rule|
+  puts &quot;#{rule.id}: #{rule.short_description.try &amp;.text}&quot;
+end
+
+# Access results
+run.results.try &amp;.each do |result|
+  loc = result.locations.try &amp;.[0]?
+  if phys = loc.try &amp;.physical_location
+    uri = phys.artifact_location.try &amp;.uri
+    line = phys.region.try &amp;.start_line
+    puts &quot;#{uri}:#{line} - #{result.message.text}&quot;
+  end
+end
+</code></pre>
+<h2 id="lightweight-validation">Lightweight Validation</h2>
+<p>Each core model provides a <code>valid?</code> method for quick structural checks without the full Validator:</p>
+<pre><code class="language-crystal hljs">message = Sarif::Message.new(text: &quot;Issue found&quot;)
+message.valid?  # =&gt; true (has text)
+
+result = Sarif::Result.new(message: message)
+result.valid?   # =&gt; true (checks message, rank 0-100, occurrence_count &gt;= 1)
+
+run = Sarif::Run.new(tool: Sarif::Tool.new(driver: driver))
+run.valid?      # =&gt; true (checks driver name and all results)
+
+log = Sarif::SarifLog.new(runs: [run])
+log.valid?      # =&gt; true (checks version &quot;2.1.0&quot; and all runs)
+</code></pre>
+<h2 id="error-types">Error Types</h2>
+<p>sarif.cr defines structured error types for different failure scenarios:</p>
+<table>
+<thead>
+<tr>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Sarif::Error</code></td>
+<td>Base exception class</td>
+</tr>
+<tr>
+<td><code>Sarif::ValidationError</code></td>
+<td>A single validation error with a JSONPath-like <code>path</code></td>
+</tr>
+<tr>
+<td><code>Sarif::ParseError</code></td>
+<td>Raised by <code>parse!</code> / <code>from_file!</code> when validation fails</td>
+</tr>
+<tr>
+<td><code>Sarif::ValidationResult</code></td>
+<td>Result object with <code>valid?</code> and <code>errors</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="handling-parse-errors">Handling Parse Errors</h3>
+<pre><code class="language-crystal hljs">begin
+  log = Sarif.parse!(json)
+rescue ex : Sarif::ParseError
+  ex.validation_errors.each do |error|
+    puts &quot;#{error.path}: #{error.message}&quot;
+    # $.version: Unsupported SARIF version: 1.0. Expected 2.1.0
+    # $.runs[0].tool.driver.name: Tool driver name must not be empty
+  end
+rescue ex : JSON::ParseException
+  puts &quot;Malformed JSON: #{ex.message}&quot;
+end
+</code></pre>
+<h3 id="working-with-validation-results">Working with Validation Results</h3>
+<pre><code class="language-crystal hljs">result = Sarif::Validator.new.validate(log)
+
+unless result.valid?
+  result.errors.each do |error|
+    puts &quot;#{error.path}: #{error.message}&quot;
+  end
+end
+</code></pre>
+
+    <div class="docs-footer">
+      <p>sarif.cr - Crystal implementation of the SARIF 2.1.0 specification</p>
+    </div>
+  </main>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+
+</body>
+</html>

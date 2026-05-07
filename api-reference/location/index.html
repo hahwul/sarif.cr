@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="API reference for Location, PhysicalLocation, Region, and related types.">
+  <title>Location - sarif.cr</title>
+  <meta property="og:title" content="Location">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://sarif.cr.hahwul.com/api-reference/location/">
+<meta property="og:description" content="API reference for Location, PhysicalLocation, Region, and related types.">
+<meta property="og:image" content="https://sarif.cr.hahwul.com/og-images/api-reference-location.svg">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Location">
+<meta name="twitter:description" content="API reference for Location, PhysicalLocation, Region, and related types.">
+<meta name="twitter:image" content="https://sarif.cr.hahwul.com/og-images/api-reference-location.svg">
+  <link rel="stylesheet" href="https://sarif.cr.hahwul.com/css/style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+  
+</head>
+<body data-section="api-reference">
+<header class="docs-header">
+  <a href="https://sarif.cr.hahwul.com/" class="logo">sarif.cr Documentation</a>
+  <nav>
+    <a href="https://sarif.cr.hahwul.com/user-guide/">User Guide</a>
+    <a href="https://sarif.cr.hahwul.com/api-reference/">API Reference</a>
+  </nav>
+  <div class="header-right">
+    <a href="https://github.com/hahwul/sarif.cr" target="_blank">GitHub</a>
+  </div>
+</header>
+<div class="docs-container">
+  <aside class="docs-sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-title">User Guide</div>
+      <ul class="sidebar-links">
+        <li><a href="https://sarif.cr.hahwul.com/user-guide/getting-started/">Getting Started</a></li>
+        <li><a href="https://sarif.cr.hahwul.com/user-guide/basic-usage/">Basic Usage</a></li>
+        <li><a href="https://sarif.cr.hahwul.com/user-guide/builder/">Builder</a></li>
+        <li><a href="https://sarif.cr.hahwul.com/user-guide/parsing-and-validation/">Parsing & Validation</a></li>
+      </ul>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-title">API Reference</div>
+      <ul class="sidebar-links">
+        <li><a href="https://sarif.cr.hahwul.com/api-reference/sarif-log/">SarifLog</a></li>
+        <li><a href="https://sarif.cr.hahwul.com/api-reference/run/">Run</a></li>
+        <li><a href="https://sarif.cr.hahwul.com/api-reference/result/">Result</a></li>
+        <li><a href="https://sarif.cr.hahwul.com/api-reference/tool/">Tool</a></li>
+        <li><a href="https://sarif.cr.hahwul.com/api-reference/location/">Location</a></li>
+        <li><a href="https://sarif.cr.hahwul.com/api-reference/enums/">Enums</a></li>
+      </ul>
+    </div>
+  </aside>
+  <main class="docs-main">
+    <h1>Location</h1>
+    <p>Location types describe where in the source code a result was found.</p>
+<h2 id="location">Location</h2>
+<p>The top-level location object, combining physical and logical locations.</p>
+<pre><code class="language-crystal hljs">Sarif::Location.new(
+  id : Int32? = nil,
+  physical_location : Sarif::PhysicalLocation? = nil,
+  logical_locations : Array(Sarif::LogicalLocation)? = nil,
+  message : Sarif::Message? = nil,
+  annotations : Array(Sarif::Region)? = nil,
+  relationships : Array(Sarif::LocationRelationship)? = nil,
+  properties : Sarif::PropertyBag? = nil
+)
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>Property</th>
+<th>Type</th>
+<th>JSON Key</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>id</code></td>
+<td><code>Int32?</code></td>
+<td><code>id</code></td>
+<td>Location identifier within the result</td>
+</tr>
+<tr>
+<td><code>physical_location</code></td>
+<td><code>PhysicalLocation?</code></td>
+<td><code>physicalLocation</code></td>
+<td>File and region</td>
+</tr>
+<tr>
+<td><code>logical_locations</code></td>
+<td><code>Array(LogicalLocation)?</code></td>
+<td><code>logicalLocations</code></td>
+<td>Namespace/class/function</td>
+</tr>
+<tr>
+<td><code>message</code></td>
+<td><code>Message?</code></td>
+<td><code>message</code></td>
+<td>Description of this location</td>
+</tr>
+<tr>
+<td><code>annotations</code></td>
+<td><code>Array(Region)?</code></td>
+<td><code>annotations</code></td>
+<td>Annotated regions</td>
+</tr>
+<tr>
+<td><code>relationships</code></td>
+<td><code>Array(LocationRelationship)?</code></td>
+<td><code>relationships</code></td>
+<td>Relations to other locations</td>
+</tr>
+</tbody>
+</table>
+<h2 id="physicallocation">PhysicalLocation</h2>
+<p>A location within a file, identified by URI and region.</p>
+<pre><code class="language-crystal hljs">Sarif::PhysicalLocation.new(
+  artifact_location : Sarif::ArtifactLocation? = nil,
+  region : Sarif::Region? = nil,
+  context_region : Sarif::Region? = nil,
+  address : Sarif::Address? = nil,
+  properties : Sarif::PropertyBag? = nil
+)
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>Property</th>
+<th>Type</th>
+<th>JSON Key</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>artifact_location</code></td>
+<td><code>ArtifactLocation?</code></td>
+<td><code>artifactLocation</code></td>
+<td>File URI</td>
+</tr>
+<tr>
+<td><code>region</code></td>
+<td><code>Region?</code></td>
+<td><code>region</code></td>
+<td>Precise region of the finding</td>
+</tr>
+<tr>
+<td><code>context_region</code></td>
+<td><code>Region?</code></td>
+<td><code>contextRegion</code></td>
+<td>Surrounding context</td>
+</tr>
+<tr>
+<td><code>address</code></td>
+<td><code>Address?</code></td>
+<td><code>address</code></td>
+<td>Memory address</td>
+</tr>
+</tbody>
+</table>
+<h2 id="artifactlocation">ArtifactLocation</h2>
+<p>Identifies a file by URI.</p>
+<pre><code class="language-crystal hljs">Sarif::ArtifactLocation.new(
+  uri : String? = nil,
+  uri_base_id : String? = nil,
+  index : Int32? = nil,
+  description : Sarif::Message? = nil
+)
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>Property</th>
+<th>Type</th>
+<th>JSON Key</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>uri</code></td>
+<td><code>String?</code></td>
+<td><code>uri</code></td>
+<td>File path or URI</td>
+</tr>
+<tr>
+<td><code>uri_base_id</code></td>
+<td><code>String?</code></td>
+<td><code>uriBaseId</code></td>
+<td>Base URI identifier (e.g., <code>%SRCROOT%</code>)</td>
+</tr>
+<tr>
+<td><code>index</code></td>
+<td><code>Int32?</code></td>
+<td><code>index</code></td>
+<td>Index into <code>run.artifacts</code></td>
+</tr>
+<tr>
+<td><code>description</code></td>
+<td><code>Message?</code></td>
+<td><code>description</code></td>
+<td>Description of the artifact</td>
+</tr>
+</tbody>
+</table>
+<h2 id="region">Region</h2>
+<p>A contiguous area within a file.</p>
+<pre><code class="language-crystal hljs">Sarif::Region.new(
+  start_line : Int32? = nil,
+  start_column : Int32? = nil,
+  end_line : Int32? = nil,
+  end_column : Int32? = nil,
+  byte_offset : Int32? = nil,
+  byte_length : Int32? = nil,
+  char_offset : Int32? = nil,
+  char_length : Int32? = nil,
+  snippet : Sarif::ArtifactContent? = nil,
+  message : Sarif::Message? = nil,
+  source_language : String? = nil
+)
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>Property</th>
+<th>Type</th>
+<th>JSON Key</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>start_line</code></td>
+<td><code>Int32?</code></td>
+<td><code>startLine</code></td>
+<td>1-based start line</td>
+</tr>
+<tr>
+<td><code>start_column</code></td>
+<td><code>Int32?</code></td>
+<td><code>startColumn</code></td>
+<td>1-based start column</td>
+</tr>
+<tr>
+<td><code>end_line</code></td>
+<td><code>Int32?</code></td>
+<td><code>endLine</code></td>
+<td>1-based end line</td>
+</tr>
+<tr>
+<td><code>end_column</code></td>
+<td><code>Int32?</code></td>
+<td><code>endColumn</code></td>
+<td>1-based exclusive end column</td>
+</tr>
+<tr>
+<td><code>byte_offset</code></td>
+<td><code>Int32?</code></td>
+<td><code>byteOffset</code></td>
+<td>Byte offset from file start</td>
+</tr>
+<tr>
+<td><code>byte_length</code></td>
+<td><code>Int32?</code></td>
+<td><code>byteLength</code></td>
+<td>Region length in bytes</td>
+</tr>
+<tr>
+<td><code>char_offset</code></td>
+<td><code>Int32?</code></td>
+<td><code>charOffset</code></td>
+<td>Character offset</td>
+</tr>
+<tr>
+<td><code>char_length</code></td>
+<td><code>Int32?</code></td>
+<td><code>charLength</code></td>
+<td>Region length in characters</td>
+</tr>
+<tr>
+<td><code>snippet</code></td>
+<td><code>ArtifactContent?</code></td>
+<td><code>snippet</code></td>
+<td>Source code snippet</td>
+</tr>
+<tr>
+<td><code>source_language</code></td>
+<td><code>String?</code></td>
+<td><code>sourceLanguage</code></td>
+<td>Language of the region</td>
+</tr>
+</tbody>
+</table>
+<h2 id="logicallocation">LogicalLocation</h2>
+<p>A location described by its logical position (namespace, class, function).</p>
+<pre><code class="language-crystal hljs">Sarif::LogicalLocation.new(
+  name : String? = nil,
+  fully_qualified_name : String? = nil,
+  kind : String? = nil,
+  parent_index : Int32? = nil
+)
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>Property</th>
+<th>Type</th>
+<th>JSON Key</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>name</code></td>
+<td><code>String?</code></td>
+<td><code>name</code></td>
+<td>Short name (e.g., <code>&quot;process&quot;</code>)</td>
+</tr>
+<tr>
+<td><code>fully_qualified_name</code></td>
+<td><code>String?</code></td>
+<td><code>fullyQualifiedName</code></td>
+<td>Full name (e.g., <code>&quot;MyModule::MyClass#process&quot;</code>)</td>
+</tr>
+<tr>
+<td><code>decorated_name</code></td>
+<td><code>String?</code></td>
+<td><code>decoratedName</code></td>
+<td>Compiler-decorated name</td>
+</tr>
+<tr>
+<td><code>kind</code></td>
+<td><code>String?</code></td>
+<td><code>kind</code></td>
+<td>Kind: <code>&quot;function&quot;</code>, <code>&quot;type&quot;</code>, <code>&quot;namespace&quot;</code>, etc.</td>
+</tr>
+<tr>
+<td><code>parent_index</code></td>
+<td><code>Int32?</code></td>
+<td><code>parentIndex</code></td>
+<td>Index of parent logical location</td>
+</tr>
+</tbody>
+</table>
+<h2 id="locationrelationship">LocationRelationship</h2>
+<p>Describes a relationship between two locations.</p>
+<pre><code class="language-crystal hljs">Sarif::LocationRelationship.new(
+  target: 1,
+  kinds: [&quot;isResultOf&quot;]
+)
+</code></pre>
+<h2 id="example">Example</h2>
+<pre><code class="language-crystal hljs">location = Sarif::Location.new(
+  id: 0,
+  physical_location: Sarif::PhysicalLocation.new(
+    artifact_location: Sarif::ArtifactLocation.new(
+      uri: &quot;src/controllers/user_controller.cr&quot;,
+      uri_base_id: &quot;%SRCROOT%&quot;
+    ),
+    region: Sarif::Region.new(
+      start_line: 42,
+      start_column: 10,
+      end_line: 42,
+      end_column: 55
+    )
+  ),
+  logical_locations: [
+    Sarif::LogicalLocation.new(
+      name: &quot;handle_login&quot;,
+      fully_qualified_name: &quot;UserController#handle_login&quot;,
+      kind: &quot;function&quot;
+    ),
+  ],
+  message: Sarif::Message.new(text: &quot;User input flows into SQL query&quot;)
+)
+</code></pre>
+
+    <div class="docs-footer">
+      <p>sarif.cr - Crystal implementation of the SARIF 2.1.0 specification</p>
+    </div>
+  </main>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+
+</body>
+</html>

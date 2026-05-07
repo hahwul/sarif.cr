@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="API reference for the Run class and run-level types.">
+  <title>Run - sarif.cr</title>
+  <meta property="og:title" content="Run">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://sarif.cr.hahwul.com/api-reference/run/">
+<meta property="og:description" content="API reference for the Run class and run-level types.">
+<meta property="og:image" content="https://sarif.cr.hahwul.com/og-images/api-reference-run.svg">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Run">
+<meta name="twitter:description" content="API reference for the Run class and run-level types.">
+<meta name="twitter:image" content="https://sarif.cr.hahwul.com/og-images/api-reference-run.svg">
+  <link rel="stylesheet" href="https://sarif.cr.hahwul.com/css/style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+  
+</head>
+<body data-section="api-reference">
+<header class="docs-header">
+  <a href="https://sarif.cr.hahwul.com/" class="logo">sarif.cr Documentation</a>
+  <nav>
+    <a href="https://sarif.cr.hahwul.com/user-guide/">User Guide</a>
+    <a href="https://sarif.cr.hahwul.com/api-reference/">API Reference</a>
+  </nav>
+  <div class="header-right">
+    <a href="https://github.com/hahwul/sarif.cr" target="_blank">GitHub</a>
+  </div>
+</header>
+<div class="docs-container">
+  <aside class="docs-sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-title">User Guide</div>
+      <ul class="sidebar-links">
+        <li><a href="https://sarif.cr.hahwul.com/user-guide/getting-started/">Getting Started</a></li>
+        <li><a href="https://sarif.cr.hahwul.com/user-guide/basic-usage/">Basic Usage</a></li>
+        <li><a href="https://sarif.cr.hahwul.com/user-guide/builder/">Builder</a></li>
+        <li><a href="https://sarif.cr.hahwul.com/user-guide/parsing-and-validation/">Parsing & Validation</a></li>
+      </ul>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-title">API Reference</div>
+      <ul class="sidebar-links">
+        <li><a href="https://sarif.cr.hahwul.com/api-reference/sarif-log/">SarifLog</a></li>
+        <li><a href="https://sarif.cr.hahwul.com/api-reference/run/">Run</a></li>
+        <li><a href="https://sarif.cr.hahwul.com/api-reference/result/">Result</a></li>
+        <li><a href="https://sarif.cr.hahwul.com/api-reference/tool/">Tool</a></li>
+        <li><a href="https://sarif.cr.hahwul.com/api-reference/location/">Location</a></li>
+        <li><a href="https://sarif.cr.hahwul.com/api-reference/enums/">Enums</a></li>
+      </ul>
+    </div>
+  </aside>
+  <main class="docs-main">
+    <h1>Run</h1>
+    <p>A <code>Run</code> represents a single invocation of a single analysis tool. A <code>SarifLog</code> contains one or more runs.</p>
+<h2 id="constructor">Constructor</h2>
+<pre><code class="language-crystal hljs">Sarif::Run.new(
+  tool : Sarif::Tool,
+  results : Array(Sarif::Result)? = nil,
+  artifacts : Array(Sarif::Artifact)? = nil,
+  invocations : Array(Sarif::Invocation)? = nil,
+  # ... additional optional parameters
+)
+</code></pre>
+<h2 id="properties">Properties</h2>
+<table>
+<thead>
+<tr>
+<th>Property</th>
+<th>Type</th>
+<th>JSON Key</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>tool</code></td>
+<td><code>Tool</code></td>
+<td><code>tool</code></td>
+<td>The analysis tool that produced this run</td>
+</tr>
+<tr>
+<td><code>results</code></td>
+<td><code>Array(Result)?</code></td>
+<td><code>results</code></td>
+<td>The results produced by the tool</td>
+</tr>
+<tr>
+<td><code>artifacts</code></td>
+<td><code>Array(Artifact)?</code></td>
+<td><code>artifacts</code></td>
+<td>Files relevant to the run</td>
+</tr>
+<tr>
+<td><code>invocations</code></td>
+<td><code>Array(Invocation)?</code></td>
+<td><code>invocations</code></td>
+<td>How the tool was invoked</td>
+</tr>
+<tr>
+<td><code>logical_locations</code></td>
+<td><code>Array(LogicalLocation)?</code></td>
+<td><code>logicalLocations</code></td>
+<td>Logical locations (namespaces, types, functions)</td>
+</tr>
+<tr>
+<td><code>graphs</code></td>
+<td><code>Array(Graph)?</code></td>
+<td><code>graphs</code></td>
+<td>Graphs associated with the run</td>
+</tr>
+<tr>
+<td><code>conversion</code></td>
+<td><code>Conversion?</code></td>
+<td><code>conversion</code></td>
+<td>Conversion details if results were converted</td>
+</tr>
+<tr>
+<td><code>language</code></td>
+<td><code>String?</code></td>
+<td><code>language</code></td>
+<td>Language of localizable strings (BCP-47)</td>
+</tr>
+<tr>
+<td><code>column_kind</code></td>
+<td><code>ColumnKind?</code></td>
+<td><code>columnKind</code></td>
+<td>How columns are counted</td>
+</tr>
+<tr>
+<td><code>automation_details</code></td>
+<td><code>RunAutomationDetails?</code></td>
+<td><code>automationDetails</code></td>
+<td>Run identification info</td>
+</tr>
+<tr>
+<td><code>version_control_provenance</code></td>
+<td><code>Array(VersionControlDetails)?</code></td>
+<td><code>versionControlProvenance</code></td>
+<td>Source control info</td>
+</tr>
+<tr>
+<td><code>original_uri_base_ids</code></td>
+<td><code>Hash(String, ArtifactLocation)?</code></td>
+<td><code>originalUriBaseIds</code></td>
+<td>URI base ID mappings</td>
+</tr>
+<tr>
+<td><code>default_encoding</code></td>
+<td><code>String?</code></td>
+<td><code>defaultEncoding</code></td>
+<td>Default file encoding</td>
+</tr>
+<tr>
+<td><code>default_source_language</code></td>
+<td><code>String?</code></td>
+<td><code>defaultSourceLanguage</code></td>
+<td>Default source language</td>
+</tr>
+<tr>
+<td><code>taxonomies</code></td>
+<td><code>Array(ToolComponent)?</code></td>
+<td><code>taxonomies</code></td>
+<td>Taxonomy definitions</td>
+</tr>
+<tr>
+<td><code>special_locations</code></td>
+<td><code>SpecialLocations?</code></td>
+<td><code>specialLocations</code></td>
+<td>Special location references</td>
+</tr>
+<tr>
+<td><code>properties</code></td>
+<td><code>PropertyBag?</code></td>
+<td><code>properties</code></td>
+<td>Custom properties</td>
+</tr>
+</tbody>
+</table>
+<h2 id="related-types">Related Types</h2>
+<h3 id="invocation">Invocation</h3>
+<p>Records how a tool was invoked.</p>
+<pre><code class="language-crystal hljs">Sarif::Invocation.new(
+  execution_successful: true,
+  command_line: &quot;linter --check src/&quot;,
+  start_time_utc: &quot;2024-01-15T10:30:00Z&quot;,
+  end_time_utc: &quot;2024-01-15T10:30:05Z&quot;,
+  exit_code: 0
+)
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>Property</th>
+<th>Type</th>
+<th>JSON Key</th>
+<th>Required</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>execution_successful</code></td>
+<td><code>Bool</code></td>
+<td><code>executionSuccessful</code></td>
+<td>Yes</td>
+</tr>
+<tr>
+<td><code>command_line</code></td>
+<td><code>String?</code></td>
+<td><code>commandLine</code></td>
+<td>No</td>
+</tr>
+<tr>
+<td><code>arguments</code></td>
+<td><code>Array(String)?</code></td>
+<td><code>arguments</code></td>
+<td>No</td>
+</tr>
+<tr>
+<td><code>start_time_utc</code></td>
+<td><code>String?</code></td>
+<td><code>startTimeUtc</code></td>
+<td>No</td>
+</tr>
+<tr>
+<td><code>end_time_utc</code></td>
+<td><code>String?</code></td>
+<td><code>endTimeUtc</code></td>
+<td>No</td>
+</tr>
+<tr>
+<td><code>exit_code</code></td>
+<td><code>Int32?</code></td>
+<td><code>exitCode</code></td>
+<td>No</td>
+</tr>
+<tr>
+<td><code>working_directory</code></td>
+<td><code>ArtifactLocation?</code></td>
+<td><code>workingDirectory</code></td>
+<td>No</td>
+</tr>
+</tbody>
+</table>
+<h3 id="artifact">Artifact</h3>
+<p>Describes a file relevant to the analysis.</p>
+<pre><code class="language-crystal hljs">Sarif::Artifact.new(
+  location: Sarif::ArtifactLocation.new(uri: &quot;src/main.cr&quot;),
+  mime_type: &quot;text/x-crystal&quot;,
+  roles: [Sarif::ArtifactRole::AnalysisTarget],
+  length: 2048_i64
+)
+</code></pre>
+<h3 id="versioncontroldetails">VersionControlDetails</h3>
+<p>Source control metadata.</p>
+<pre><code class="language-crystal hljs">Sarif::VersionControlDetails.new(
+  repository_uri: &quot;https://github.com/example/repo&quot;,
+  revision_id: &quot;abc123&quot;,
+  branch: &quot;main&quot;
+)
+</code></pre>
+<h3 id="conversion">Conversion</h3>
+<p>Describes a conversion from another format.</p>
+<pre><code class="language-crystal hljs">Sarif::Conversion.new(
+  tool: Sarif::Tool.new(
+    driver: Sarif::ToolComponent.new(name: &quot;Converter&quot;)
+  )
+)
+</code></pre>
+<h2 id="example">Example</h2>
+<pre><code class="language-crystal hljs">run = Sarif::Run.new(
+  tool: Sarif::Tool.new(
+    driver: Sarif::ToolComponent.new(
+      name: &quot;SecurityScanner&quot;, version: &quot;3.0&quot;
+    )
+  ),
+  results: [
+    Sarif::Result.new(
+      message: Sarif::Message.new(text: &quot;SQL injection risk&quot;),
+      rule_id: &quot;SEC001&quot;,
+      level: Sarif::Level::Error
+    ),
+  ],
+  invocations: [
+    Sarif::Invocation.new(execution_successful: true),
+  ],
+  column_kind: Sarif::ColumnKind::Utf16CodeUnits,
+  version_control_provenance: [
+    Sarif::VersionControlDetails.new(
+      repository_uri: &quot;https://github.com/example/app&quot;,
+      branch: &quot;main&quot;
+    ),
+  ]
+)
+</code></pre>
+
+    <div class="docs-footer">
+      <p>sarif.cr - Crystal implementation of the SARIF 2.1.0 specification</p>
+    </div>
+  </main>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+
+</body>
+</html>

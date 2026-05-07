@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="API reference for the PropertyBag class with typed accessors.">
+  <title>PropertyBag - sarif.cr</title>
+  <meta property="og:title" content="PropertyBag">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://sarif.cr.hahwul.com/api-reference/property-bag/">
+<meta property="og:description" content="API reference for the PropertyBag class with typed accessors.">
+<meta property="og:image" content="https://sarif.cr.hahwul.com/og-images/api-reference-property-bag.svg">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="PropertyBag">
+<meta name="twitter:description" content="API reference for the PropertyBag class with typed accessors.">
+<meta name="twitter:image" content="https://sarif.cr.hahwul.com/og-images/api-reference-property-bag.svg">
+  <link rel="stylesheet" href="https://sarif.cr.hahwul.com/css/style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+  
+</head>
+<body data-section="api-reference">
+<header class="docs-header">
+  <a href="https://sarif.cr.hahwul.com/" class="logo">sarif.cr Documentation</a>
+  <nav>
+    <a href="https://sarif.cr.hahwul.com/user-guide/">User Guide</a>
+    <a href="https://sarif.cr.hahwul.com/api-reference/">API Reference</a>
+  </nav>
+  <div class="header-right">
+    <a href="https://github.com/hahwul/sarif.cr" target="_blank">GitHub</a>
+  </div>
+</header>
+<div class="docs-container">
+  <aside class="docs-sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-title">User Guide</div>
+      <ul class="sidebar-links">
+        <li><a href="https://sarif.cr.hahwul.com/user-guide/getting-started/">Getting Started</a></li>
+        <li><a href="https://sarif.cr.hahwul.com/user-guide/basic-usage/">Basic Usage</a></li>
+        <li><a href="https://sarif.cr.hahwul.com/user-guide/builder/">Builder</a></li>
+        <li><a href="https://sarif.cr.hahwul.com/user-guide/parsing-and-validation/">Parsing & Validation</a></li>
+      </ul>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-title">API Reference</div>
+      <ul class="sidebar-links">
+        <li><a href="https://sarif.cr.hahwul.com/api-reference/sarif-log/">SarifLog</a></li>
+        <li><a href="https://sarif.cr.hahwul.com/api-reference/run/">Run</a></li>
+        <li><a href="https://sarif.cr.hahwul.com/api-reference/result/">Result</a></li>
+        <li><a href="https://sarif.cr.hahwul.com/api-reference/tool/">Tool</a></li>
+        <li><a href="https://sarif.cr.hahwul.com/api-reference/location/">Location</a></li>
+        <li><a href="https://sarif.cr.hahwul.com/api-reference/enums/">Enums</a></li>
+      </ul>
+    </div>
+  </aside>
+  <main class="docs-main">
+    <h1>PropertyBag</h1>
+    <p>A <code>PropertyBag</code> stores arbitrary key-value metadata on any SARIF object. It supports both dynamic access and type-safe accessors.</p>
+<h2 id="constructor">Constructor</h2>
+<pre><code class="language-crystal hljs">Sarif::PropertyBag.new(tags : Array(String)? = nil)
+</code></pre>
+<h2 id="dynamic-access">Dynamic Access</h2>
+<pre><code class="language-crystal hljs">bag = Sarif::PropertyBag.new
+bag[&quot;score&quot;] = JSON::Any.new(95.0)
+bag[&quot;score&quot;]   # =&gt; JSON::Any(95.0)
+bag[&quot;score&quot;]?  # =&gt; JSON::Any(95.0) or nil
+</code></pre>
+<h2 id="typed-accessors">Typed Accessors</h2>
+<p>Safe retrieval methods that return <code>nil</code> on type mismatch, with optional defaults:</p>
+<pre><code class="language-crystal hljs">bag.get_string(&quot;name&quot;)              # =&gt; String?
+bag.get_string(&quot;name&quot;, &quot;unknown&quot;)   # =&gt; String (with default)
+
+bag.get_int(&quot;count&quot;)                # =&gt; Int64?
+bag.get_int(&quot;count&quot;, 0_i64)         # =&gt; Int64 (with default)
+
+bag.get_float(&quot;score&quot;)              # =&gt; Float64?
+bag.get_float(&quot;score&quot;, 0.0)         # =&gt; Float64 (with default)
+
+bag.get_bool(&quot;enabled&quot;)             # =&gt; Bool?
+bag.get_bool(&quot;enabled&quot;, false)      # =&gt; Bool (with default)
+</code></pre>
+<h2 id="utility-methods">Utility Methods</h2>
+<pre><code class="language-crystal hljs">bag.has_key?(&quot;score&quot;)  # =&gt; true
+bag.size               # =&gt; 1 (custom properties, excluding tags)
+bag.keys               # =&gt; [&quot;score&quot;]
+</code></pre>
+<h2 id="tags">Tags</h2>
+<pre><code class="language-crystal hljs">bag = Sarif::PropertyBag.new(tags: [&quot;security&quot;, &quot;critical&quot;])
+bag.tags  # =&gt; [&quot;security&quot;, &quot;critical&quot;]
+</code></pre>
+<h2 id="merging">Merging</h2>
+<p>Merge another PropertyBag into the current one. Existing keys are overwritten; tags are deduplicated:</p>
+<pre><code class="language-crystal hljs">a = Sarif::PropertyBag.new(tags: [&quot;security&quot;])
+a[&quot;key&quot;] = JSON::Any.new(&quot;value1&quot;)
+
+b = Sarif::PropertyBag.new(tags: [&quot;security&quot;, &quot;new&quot;])
+b[&quot;key&quot;] = JSON::Any.new(&quot;value2&quot;)
+
+a.merge!(b)
+a.get_string(&quot;key&quot;)  # =&gt; &quot;value2&quot; (overwritten)
+a.tags                # =&gt; [&quot;security&quot;, &quot;new&quot;] (deduplicated)
+</code></pre>
+
+    <div class="docs-footer">
+      <p>sarif.cr - Crystal implementation of the SARIF 2.1.0 specification</p>
+    </div>
+  </main>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+
+</body>
+</html>

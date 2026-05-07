@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="API reference for all SARIF enum types and the sarif_enum macro.">
+  <title>Enums - sarif.cr</title>
+  <meta property="og:title" content="Enums">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://sarif.cr.hahwul.com/api-reference/enums/">
+<meta property="og:description" content="API reference for all SARIF enum types and the sarif_enum macro.">
+<meta property="og:image" content="https://sarif.cr.hahwul.com/og-images/api-reference-enums.svg">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Enums">
+<meta name="twitter:description" content="API reference for all SARIF enum types and the sarif_enum macro.">
+<meta name="twitter:image" content="https://sarif.cr.hahwul.com/og-images/api-reference-enums.svg">
+  <link rel="stylesheet" href="https://sarif.cr.hahwul.com/css/style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+  
+</head>
+<body data-section="api-reference">
+<header class="docs-header">
+  <a href="https://sarif.cr.hahwul.com/" class="logo">sarif.cr Documentation</a>
+  <nav>
+    <a href="https://sarif.cr.hahwul.com/user-guide/">User Guide</a>
+    <a href="https://sarif.cr.hahwul.com/api-reference/">API Reference</a>
+  </nav>
+  <div class="header-right">
+    <a href="https://github.com/hahwul/sarif.cr" target="_blank">GitHub</a>
+  </div>
+</header>
+<div class="docs-container">
+  <aside class="docs-sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-title">User Guide</div>
+      <ul class="sidebar-links">
+        <li><a href="https://sarif.cr.hahwul.com/user-guide/getting-started/">Getting Started</a></li>
+        <li><a href="https://sarif.cr.hahwul.com/user-guide/basic-usage/">Basic Usage</a></li>
+        <li><a href="https://sarif.cr.hahwul.com/user-guide/builder/">Builder</a></li>
+        <li><a href="https://sarif.cr.hahwul.com/user-guide/parsing-and-validation/">Parsing & Validation</a></li>
+      </ul>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-title">API Reference</div>
+      <ul class="sidebar-links">
+        <li><a href="https://sarif.cr.hahwul.com/api-reference/sarif-log/">SarifLog</a></li>
+        <li><a href="https://sarif.cr.hahwul.com/api-reference/run/">Run</a></li>
+        <li><a href="https://sarif.cr.hahwul.com/api-reference/result/">Result</a></li>
+        <li><a href="https://sarif.cr.hahwul.com/api-reference/tool/">Tool</a></li>
+        <li><a href="https://sarif.cr.hahwul.com/api-reference/location/">Location</a></li>
+        <li><a href="https://sarif.cr.hahwul.com/api-reference/enums/">Enums</a></li>
+      </ul>
+    </div>
+  </aside>
+  <main class="docs-main">
+    <h1>Enums</h1>
+    <p>sarif.cr provides type-safe enums for all SARIF enumerated values. Enums serialize to lowerCamelCase JSON strings using the <code>sarif_enum</code> macro.</p>
+<h2 id="level">Level</h2>
+<p>Severity level for results and notifications.</p>
+<table>
+<thead>
+<tr>
+<th>Value</th>
+<th>JSON</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Level::None</code></td>
+<td><code>&quot;none&quot;</code></td>
+<td>No severity</td>
+</tr>
+<tr>
+<td><code>Level::Note</code></td>
+<td><code>&quot;note&quot;</code></td>
+<td>Informational</td>
+</tr>
+<tr>
+<td><code>Level::Warning</code></td>
+<td><code>&quot;warning&quot;</code></td>
+<td>Warning (default for results)</td>
+</tr>
+<tr>
+<td><code>Level::Error</code></td>
+<td><code>&quot;error&quot;</code></td>
+<td>Error</td>
+</tr>
+</tbody>
+</table>
+<pre><code class="language-crystal hljs">Sarif::Level::Warning.to_json  # =&gt; &quot;\&quot;warning\&quot;&quot;
+Sarif::Level.from_json(&quot;\&quot;error\&quot;&quot;)  # =&gt; Sarif::Level::Error
+</code></pre>
+<h2 id="resultkind">ResultKind</h2>
+<p>Classification of a result.</p>
+<table>
+<thead>
+<tr>
+<th>Value</th>
+<th>JSON</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ResultKind::NotApplicable</code></td>
+<td><code>&quot;notApplicable&quot;</code></td>
+<td>Rule does not apply</td>
+</tr>
+<tr>
+<td><code>ResultKind::Pass</code></td>
+<td><code>&quot;pass&quot;</code></td>
+<td>Analysis passed</td>
+</tr>
+<tr>
+<td><code>ResultKind::Fail</code></td>
+<td><code>&quot;fail&quot;</code></td>
+<td>Analysis failed (default)</td>
+</tr>
+<tr>
+<td><code>ResultKind::Review</code></td>
+<td><code>&quot;review&quot;</code></td>
+<td>Needs human review</td>
+</tr>
+<tr>
+<td><code>ResultKind::Open</code></td>
+<td><code>&quot;open&quot;</code></td>
+<td>Open question</td>
+</tr>
+<tr>
+<td><code>ResultKind::Informational</code></td>
+<td><code>&quot;informational&quot;</code></td>
+<td>Informational only</td>
+</tr>
+</tbody>
+</table>
+<h2 id="baselinestate">BaselineState</h2>
+<p>State of a result relative to a baseline.</p>
+<table>
+<thead>
+<tr>
+<th>Value</th>
+<th>JSON</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>BaselineState::New</code></td>
+<td><code>&quot;new&quot;</code></td>
+<td>First appearance</td>
+</tr>
+<tr>
+<td><code>BaselineState::Unchanged</code></td>
+<td><code>&quot;unchanged&quot;</code></td>
+<td>Same as baseline</td>
+</tr>
+<tr>
+<td><code>BaselineState::Updated</code></td>
+<td><code>&quot;updated&quot;</code></td>
+<td>Changed since baseline</td>
+</tr>
+<tr>
+<td><code>BaselineState::Absent</code></td>
+<td><code>&quot;absent&quot;</code></td>
+<td>No longer present</td>
+</tr>
+</tbody>
+</table>
+<h2 id="suppressionkind">SuppressionKind</h2>
+<p>How a result was suppressed.</p>
+<table>
+<thead>
+<tr>
+<th>Value</th>
+<th>JSON</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>SuppressionKind::InSource</code></td>
+<td><code>&quot;inSource&quot;</code></td>
+<td>Suppressed via source annotation</td>
+</tr>
+<tr>
+<td><code>SuppressionKind::External</code></td>
+<td><code>&quot;external&quot;</code></td>
+<td>Suppressed via external config</td>
+</tr>
+</tbody>
+</table>
+<h2 id="suppressionstatus">SuppressionStatus</h2>
+<p>Status of a suppression.</p>
+<table>
+<thead>
+<tr>
+<th>Value</th>
+<th>JSON</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>SuppressionStatus::Accepted</code></td>
+<td><code>&quot;accepted&quot;</code></td>
+<td>Suppression accepted</td>
+</tr>
+<tr>
+<td><code>SuppressionStatus::UnderReview</code></td>
+<td><code>&quot;underReview&quot;</code></td>
+<td>Under review</td>
+</tr>
+<tr>
+<td><code>SuppressionStatus::Rejected</code></td>
+<td><code>&quot;rejected&quot;</code></td>
+<td>Suppression rejected</td>
+</tr>
+</tbody>
+</table>
+<h2 id="importance">Importance</h2>
+<p>Importance of a thread flow location.</p>
+<table>
+<thead>
+<tr>
+<th>Value</th>
+<th>JSON</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Importance::Important</code></td>
+<td><code>&quot;important&quot;</code></td>
+<td>Important step</td>
+</tr>
+<tr>
+<td><code>Importance::Essential</code></td>
+<td><code>&quot;essential&quot;</code></td>
+<td>Essential step</td>
+</tr>
+<tr>
+<td><code>Importance::Unimportant</code></td>
+<td><code>&quot;unimportant&quot;</code></td>
+<td>Minor step</td>
+</tr>
+</tbody>
+</table>
+<h2 id="artifactrole">ArtifactRole</h2>
+<p>Role of an artifact in the analysis.</p>
+<table>
+<thead>
+<tr>
+<th>Value</th>
+<th>JSON</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ArtifactRole::AnalysisTarget</code></td>
+<td><code>&quot;analysisTarget&quot;</code></td>
+</tr>
+<tr>
+<td><code>ArtifactRole::Attachment</code></td>
+<td><code>&quot;attachment&quot;</code></td>
+</tr>
+<tr>
+<td><code>ArtifactRole::ResponseFile</code></td>
+<td><code>&quot;responseFile&quot;</code></td>
+</tr>
+<tr>
+<td><code>ArtifactRole::ResultFile</code></td>
+<td><code>&quot;resultFile&quot;</code></td>
+</tr>
+<tr>
+<td><code>ArtifactRole::StandardStream</code></td>
+<td><code>&quot;standardStream&quot;</code></td>
+</tr>
+<tr>
+<td><code>ArtifactRole::TracedFile</code></td>
+<td><code>&quot;tracedFile&quot;</code></td>
+</tr>
+<tr>
+<td><code>ArtifactRole::Unmodified</code></td>
+<td><code>&quot;unmodified&quot;</code></td>
+</tr>
+<tr>
+<td><code>ArtifactRole::Modified</code></td>
+<td><code>&quot;modified&quot;</code></td>
+</tr>
+<tr>
+<td><code>ArtifactRole::Added</code></td>
+<td><code>&quot;added&quot;</code></td>
+</tr>
+<tr>
+<td><code>ArtifactRole::Deleted</code></td>
+<td><code>&quot;deleted&quot;</code></td>
+</tr>
+<tr>
+<td><code>ArtifactRole::Renamed</code></td>
+<td><code>&quot;renamed&quot;</code></td>
+</tr>
+<tr>
+<td><code>ArtifactRole::Uncontrolled</code></td>
+<td><code>&quot;uncontrolled&quot;</code></td>
+</tr>
+<tr>
+<td><code>ArtifactRole::Driver</code></td>
+<td><code>&quot;driver&quot;</code></td>
+</tr>
+<tr>
+<td><code>ArtifactRole::Extension</code></td>
+<td><code>&quot;extension&quot;</code></td>
+</tr>
+<tr>
+<td><code>ArtifactRole::Translation</code></td>
+<td><code>&quot;translation&quot;</code></td>
+</tr>
+<tr>
+<td><code>ArtifactRole::Taxonomy</code></td>
+<td><code>&quot;taxonomy&quot;</code></td>
+</tr>
+<tr>
+<td><code>ArtifactRole::Policy</code></td>
+<td><code>&quot;policy&quot;</code></td>
+</tr>
+<tr>
+<td><code>ArtifactRole::ReferencedOnCommandLine</code></td>
+<td><code>&quot;referencedOnCommandLine&quot;</code></td>
+</tr>
+<tr>
+<td><code>ArtifactRole::MemoryContents</code></td>
+<td><code>&quot;memoryContents&quot;</code></td>
+</tr>
+<tr>
+<td><code>ArtifactRole::Directory</code></td>
+<td><code>&quot;directory&quot;</code></td>
+</tr>
+<tr>
+<td><code>ArtifactRole::UserSpecifiedConfiguration</code></td>
+<td><code>&quot;userSpecifiedConfiguration&quot;</code></td>
+</tr>
+<tr>
+<td><code>ArtifactRole::ToolSpecifiedConfiguration</code></td>
+<td><code>&quot;toolSpecifiedConfiguration&quot;</code></td>
+</tr>
+<tr>
+<td><code>ArtifactRole::DebugOutputFile</code></td>
+<td><code>&quot;debugOutputFile&quot;</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="columnkind">ColumnKind</h2>
+<p>How column numbers are counted.</p>
+<table>
+<thead>
+<tr>
+<th>Value</th>
+<th>JSON</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ColumnKind::Utf16CodeUnits</code></td>
+<td><code>&quot;utf16CodeUnits&quot;</code></td>
+<td>UTF-16 code units</td>
+</tr>
+<tr>
+<td><code>ColumnKind::UnicodeCodePoints</code></td>
+<td><code>&quot;unicodeCodePoints&quot;</code></td>
+<td>Unicode code points</td>
+</tr>
+</tbody>
+</table>
+<h2 id="toolcomponentcontent">ToolComponentContent</h2>
+<p>Type of content in a tool component.</p>
+<table>
+<thead>
+<tr>
+<th>Value</th>
+<th>JSON</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ToolComponentContent::LocalizedData</code></td>
+<td><code>&quot;localizedData&quot;</code></td>
+</tr>
+<tr>
+<td><code>ToolComponentContent::NonLocalizedData</code></td>
+<td><code>&quot;nonLocalizedData&quot;</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="the-sarif-enum-macro">The <code>sarif_enum</code> Macro</h2>
+<p>All enums are defined using the <code>sarif_enum</code> macro, which auto-generates <code>to_json</code>, <code>from_json</code>, <code>to_s_sarif</code>, and <code>parse_sarif</code> methods:</p>
+<pre><code class="language-crystal hljs">Sarif.sarif_enum(Level, {
+  None    =&gt; &quot;none&quot;,
+  Note    =&gt; &quot;note&quot;,
+  Warning =&gt; &quot;warning&quot;,
+  Error   =&gt; &quot;error&quot;,
+})
+</code></pre>
+<p>This generates a Crystal <code>enum</code> with proper JSON serialization to/from the SARIF lowerCamelCase string values.</p>
+
+    <div class="docs-footer">
+      <p>sarif.cr - Crystal implementation of the SARIF 2.1.0 specification</p>
+    </div>
+  </main>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+
+</body>
+</html>

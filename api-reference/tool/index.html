@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="API reference for Tool, ToolComponent, and ReportingDescriptor.">
+  <title>Tool - sarif.cr</title>
+  <meta property="og:title" content="Tool">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://sarif.cr.hahwul.com/api-reference/tool/">
+<meta property="og:description" content="API reference for Tool, ToolComponent, and ReportingDescriptor.">
+<meta property="og:image" content="https://sarif.cr.hahwul.com/og-images/api-reference-tool.svg">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Tool">
+<meta name="twitter:description" content="API reference for Tool, ToolComponent, and ReportingDescriptor.">
+<meta name="twitter:image" content="https://sarif.cr.hahwul.com/og-images/api-reference-tool.svg">
+  <link rel="stylesheet" href="https://sarif.cr.hahwul.com/css/style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+  
+</head>
+<body data-section="api-reference">
+<header class="docs-header">
+  <a href="https://sarif.cr.hahwul.com/" class="logo">sarif.cr Documentation</a>
+  <nav>
+    <a href="https://sarif.cr.hahwul.com/user-guide/">User Guide</a>
+    <a href="https://sarif.cr.hahwul.com/api-reference/">API Reference</a>
+  </nav>
+  <div class="header-right">
+    <a href="https://github.com/hahwul/sarif.cr" target="_blank">GitHub</a>
+  </div>
+</header>
+<div class="docs-container">
+  <aside class="docs-sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-title">User Guide</div>
+      <ul class="sidebar-links">
+        <li><a href="https://sarif.cr.hahwul.com/user-guide/getting-started/">Getting Started</a></li>
+        <li><a href="https://sarif.cr.hahwul.com/user-guide/basic-usage/">Basic Usage</a></li>
+        <li><a href="https://sarif.cr.hahwul.com/user-guide/builder/">Builder</a></li>
+        <li><a href="https://sarif.cr.hahwul.com/user-guide/parsing-and-validation/">Parsing & Validation</a></li>
+      </ul>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-title">API Reference</div>
+      <ul class="sidebar-links">
+        <li><a href="https://sarif.cr.hahwul.com/api-reference/sarif-log/">SarifLog</a></li>
+        <li><a href="https://sarif.cr.hahwul.com/api-reference/run/">Run</a></li>
+        <li><a href="https://sarif.cr.hahwul.com/api-reference/result/">Result</a></li>
+        <li><a href="https://sarif.cr.hahwul.com/api-reference/tool/">Tool</a></li>
+        <li><a href="https://sarif.cr.hahwul.com/api-reference/location/">Location</a></li>
+        <li><a href="https://sarif.cr.hahwul.com/api-reference/enums/">Enums</a></li>
+      </ul>
+    </div>
+  </aside>
+  <main class="docs-main">
+    <h1>Tool</h1>
+    <p>The <code>Tool</code> class describes the analysis tool that produced the results. It consists of a required <code>driver</code> component and optional <code>extensions</code>.</p>
+<h2 id="tool">Tool</h2>
+<pre><code class="language-crystal hljs">Sarif::Tool.new(
+  driver : Sarif::ToolComponent,
+  extensions : Array(Sarif::ToolComponent)? = nil,
+  properties : Sarif::PropertyBag? = nil
+)
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>Property</th>
+<th>Type</th>
+<th>JSON Key</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>driver</code></td>
+<td><code>ToolComponent</code></td>
+<td><code>driver</code></td>
+<td>The primary tool component (required)</td>
+</tr>
+<tr>
+<td><code>extensions</code></td>
+<td><code>Array(ToolComponent)?</code></td>
+<td><code>extensions</code></td>
+<td>Plugins or extensions</td>
+</tr>
+<tr>
+<td><code>properties</code></td>
+<td><code>PropertyBag?</code></td>
+<td><code>properties</code></td>
+<td>Custom properties</td>
+</tr>
+</tbody>
+</table>
+<h2 id="toolcomponent">ToolComponent</h2>
+<p>Describes a tool component (driver or extension).</p>
+<pre><code class="language-crystal hljs">Sarif::ToolComponent.new(
+  name : String,
+  version : String? = nil,
+  semantic_version : String? = nil,
+  guid : String? = nil,
+  information_uri : String? = nil,
+  rules : Array(Sarif::ReportingDescriptor)? = nil,
+  # ... additional optional parameters
+)
+</code></pre>
+<h3 id="properties">Properties</h3>
+<table>
+<thead>
+<tr>
+<th>Property</th>
+<th>Type</th>
+<th>JSON Key</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>name</code></td>
+<td><code>String</code></td>
+<td><code>name</code></td>
+<td>Tool name (required)</td>
+</tr>
+<tr>
+<td><code>version</code></td>
+<td><code>String?</code></td>
+<td><code>version</code></td>
+<td>Tool version</td>
+</tr>
+<tr>
+<td><code>semantic_version</code></td>
+<td><code>String?</code></td>
+<td><code>semanticVersion</code></td>
+<td>Semantic version string</td>
+</tr>
+<tr>
+<td><code>guid</code></td>
+<td><code>String?</code></td>
+<td><code>guid</code></td>
+<td>Unique identifier</td>
+</tr>
+<tr>
+<td><code>organization</code></td>
+<td><code>String?</code></td>
+<td><code>organization</code></td>
+<td>Organization name</td>
+</tr>
+<tr>
+<td><code>product</code></td>
+<td><code>String?</code></td>
+<td><code>product</code></td>
+<td>Product name</td>
+</tr>
+<tr>
+<td><code>full_name</code></td>
+<td><code>String?</code></td>
+<td><code>fullName</code></td>
+<td>Full display name</td>
+</tr>
+<tr>
+<td><code>short_description</code></td>
+<td><code>MultiformatMessageString?</code></td>
+<td><code>shortDescription</code></td>
+<td>Brief description</td>
+</tr>
+<tr>
+<td><code>full_description</code></td>
+<td><code>MultiformatMessageString?</code></td>
+<td><code>fullDescription</code></td>
+<td>Detailed description</td>
+</tr>
+<tr>
+<td><code>information_uri</code></td>
+<td><code>String?</code></td>
+<td><code>informationUri</code></td>
+<td>Documentation URL</td>
+</tr>
+<tr>
+<td><code>download_uri</code></td>
+<td><code>String?</code></td>
+<td><code>downloadUri</code></td>
+<td>Download URL</td>
+</tr>
+<tr>
+<td><code>rules</code></td>
+<td><code>Array(ReportingDescriptor)?</code></td>
+<td><code>rules</code></td>
+<td>Analysis rules</td>
+</tr>
+<tr>
+<td><code>notifications</code></td>
+<td><code>Array(ReportingDescriptor)?</code></td>
+<td><code>notifications</code></td>
+<td>Notification descriptors</td>
+</tr>
+<tr>
+<td><code>taxa</code></td>
+<td><code>Array(ReportingDescriptor)?</code></td>
+<td><code>taxa</code></td>
+<td>Taxonomy items</td>
+</tr>
+<tr>
+<td><code>language</code></td>
+<td><code>String?</code></td>
+<td><code>language</code></td>
+<td>Localization language</td>
+</tr>
+<tr>
+<td><code>contents</code></td>
+<td><code>Array(ToolComponentContent)?</code></td>
+<td><code>contents</code></td>
+<td>Content types</td>
+</tr>
+<tr>
+<td><code>global_message_strings</code></td>
+<td><code>Hash(String, MultiformatMessageString)?</code></td>
+<td><code>globalMessageStrings</code></td>
+<td>Shared message templates</td>
+</tr>
+<tr>
+<td><code>translation_metadata</code></td>
+<td><code>TranslationMetadata?</code></td>
+<td><code>translationMetadata</code></td>
+<td>Translation info</td>
+</tr>
+<tr>
+<td><code>properties</code></td>
+<td><code>PropertyBag?</code></td>
+<td><code>properties</code></td>
+<td>Custom properties</td>
+</tr>
+</tbody>
+</table>
+<h2 id="reportingdescriptor">ReportingDescriptor</h2>
+<p>Describes a rule, notification, or taxonomy item.</p>
+<pre><code class="language-crystal hljs">Sarif::ReportingDescriptor.new(
+  id : String,
+  name : String? = nil,
+  short_description : Sarif::MultiformatMessageString? = nil,
+  full_description : Sarif::MultiformatMessageString? = nil,
+  help_uri : String? = nil,
+  default_configuration : Sarif::ReportingConfiguration? = nil,
+  # ... additional optional parameters
+)
+</code></pre>
+<h3 id="properties-1">Properties</h3>
+<table>
+<thead>
+<tr>
+<th>Property</th>
+<th>Type</th>
+<th>JSON Key</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>id</code></td>
+<td><code>String</code></td>
+<td><code>id</code></td>
+<td>Stable rule identifier (required)</td>
+</tr>
+<tr>
+<td><code>name</code></td>
+<td><code>String?</code></td>
+<td><code>name</code></td>
+<td>Rule name</td>
+</tr>
+<tr>
+<td><code>guid</code></td>
+<td><code>String?</code></td>
+<td><code>guid</code></td>
+<td>Unique identifier</td>
+</tr>
+<tr>
+<td><code>short_description</code></td>
+<td><code>MultiformatMessageString?</code></td>
+<td><code>shortDescription</code></td>
+<td>Brief description</td>
+</tr>
+<tr>
+<td><code>full_description</code></td>
+<td><code>MultiformatMessageString?</code></td>
+<td><code>fullDescription</code></td>
+<td>Detailed description</td>
+</tr>
+<tr>
+<td><code>message_strings</code></td>
+<td><code>Hash(String, MultiformatMessageString)?</code></td>
+<td><code>messageStrings</code></td>
+<td>Message templates</td>
+</tr>
+<tr>
+<td><code>default_configuration</code></td>
+<td><code>ReportingConfiguration?</code></td>
+<td><code>defaultConfiguration</code></td>
+<td>Default settings</td>
+</tr>
+<tr>
+<td><code>help_uri</code></td>
+<td><code>String?</code></td>
+<td><code>helpUri</code></td>
+<td>Help documentation URL</td>
+</tr>
+<tr>
+<td><code>help</code></td>
+<td><code>MultiformatMessageString?</code></td>
+<td><code>help</code></td>
+<td>Full help text</td>
+</tr>
+<tr>
+<td><code>relationships</code></td>
+<td><code>Array(ReportingDescriptorRelationship)?</code></td>
+<td><code>relationships</code></td>
+<td>Related rules/taxa</td>
+</tr>
+<tr>
+<td><code>deprecated_ids</code></td>
+<td><code>Array(String)?</code></td>
+<td><code>deprecatedIds</code></td>
+<td>Former identifiers</td>
+</tr>
+<tr>
+<td><code>properties</code></td>
+<td><code>PropertyBag?</code></td>
+<td><code>properties</code></td>
+<td>Custom properties</td>
+</tr>
+</tbody>
+</table>
+<h2 id="reportingconfiguration">ReportingConfiguration</h2>
+<p>Default settings for a rule.</p>
+<pre><code class="language-crystal hljs">Sarif::ReportingConfiguration.new(
+  enabled: true,
+  level: Sarif::Level::Warning,
+  rank: 50.0
+)
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>Property</th>
+<th>Type</th>
+<th>JSON Key</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>enabled</code></td>
+<td><code>Bool?</code></td>
+<td><code>enabled</code></td>
+<td>Whether the rule is enabled</td>
+</tr>
+<tr>
+<td><code>level</code></td>
+<td><code>Level?</code></td>
+<td><code>level</code></td>
+<td>Default severity level</td>
+</tr>
+<tr>
+<td><code>rank</code></td>
+<td><code>Float64?</code></td>
+<td><code>rank</code></td>
+<td>Default priority ranking</td>
+</tr>
+<tr>
+<td><code>parameters</code></td>
+<td><code>PropertyBag?</code></td>
+<td><code>parameters</code></td>
+<td>Rule parameters</td>
+</tr>
+</tbody>
+</table>
+<h2 id="multiformatmessagestring">MultiformatMessageString</h2>
+<p>A message with optional markdown formatting.</p>
+<pre><code class="language-crystal hljs">Sarif::MultiformatMessageString.new(
+  text: &quot;SQL Injection vulnerability&quot;,
+  markdown: &quot;**SQL Injection** vulnerability&quot;
+)
+</code></pre>
+<h2 id="example">Example</h2>
+<pre><code class="language-crystal hljs">tool = Sarif::Tool.new(
+  driver: Sarif::ToolComponent.new(
+    name: &quot;SecurityScanner&quot;,
+    version: &quot;3.0&quot;,
+    information_uri: &quot;https://example.com/scanner&quot;,
+    rules: [
+      Sarif::ReportingDescriptor.new(
+        id: &quot;SEC001&quot;,
+        name: &quot;SqlInjection&quot;,
+        short_description: Sarif::MultiformatMessageString.new(
+          text: &quot;SQL Injection vulnerability&quot;
+        ),
+        default_configuration: Sarif::ReportingConfiguration.new(
+          level: Sarif::Level::Error
+        ),
+        help_uri: &quot;https://example.com/rules/SEC001&quot;
+      ),
+    ]
+  ),
+  extensions: [
+    Sarif::ToolComponent.new(
+      name: &quot;XSSPlugin&quot;,
+      version: &quot;1.0&quot;
+    ),
+  ]
+)
+</code></pre>
+
+    <div class="docs-footer">
+      <p>sarif.cr - Crystal implementation of the SARIF 2.1.0 specification</p>
+    </div>
+  </main>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+
+</body>
+</html>

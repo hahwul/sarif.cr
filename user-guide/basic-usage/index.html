@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Create and manipulate SARIF objects directly using the Crystal type system.">
+  <title>Basic Usage - sarif.cr</title>
+  <meta property="og:title" content="Basic Usage">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://sarif.cr.hahwul.com/user-guide/basic-usage/">
+<meta property="og:description" content="Create and manipulate SARIF objects directly using the Crystal type system.">
+<meta property="og:image" content="https://sarif.cr.hahwul.com/og-images/user-guide-basic-usage.svg">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Basic Usage">
+<meta name="twitter:description" content="Create and manipulate SARIF objects directly using the Crystal type system.">
+<meta name="twitter:image" content="https://sarif.cr.hahwul.com/og-images/user-guide-basic-usage.svg">
+  <link rel="stylesheet" href="https://sarif.cr.hahwul.com/css/style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+  
+</head>
+<body data-section="user-guide">
+<header class="docs-header">
+  <a href="https://sarif.cr.hahwul.com/" class="logo">sarif.cr Documentation</a>
+  <nav>
+    <a href="https://sarif.cr.hahwul.com/user-guide/">User Guide</a>
+    <a href="https://sarif.cr.hahwul.com/api-reference/">API Reference</a>
+  </nav>
+  <div class="header-right">
+    <a href="https://github.com/hahwul/sarif.cr" target="_blank">GitHub</a>
+  </div>
+</header>
+<div class="docs-container">
+  <aside class="docs-sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-title">User Guide</div>
+      <ul class="sidebar-links">
+        <li><a href="https://sarif.cr.hahwul.com/user-guide/getting-started/">Getting Started</a></li>
+        <li><a href="https://sarif.cr.hahwul.com/user-guide/basic-usage/">Basic Usage</a></li>
+        <li><a href="https://sarif.cr.hahwul.com/user-guide/builder/">Builder</a></li>
+        <li><a href="https://sarif.cr.hahwul.com/user-guide/parsing-and-validation/">Parsing & Validation</a></li>
+      </ul>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-title">API Reference</div>
+      <ul class="sidebar-links">
+        <li><a href="https://sarif.cr.hahwul.com/api-reference/sarif-log/">SarifLog</a></li>
+        <li><a href="https://sarif.cr.hahwul.com/api-reference/run/">Run</a></li>
+        <li><a href="https://sarif.cr.hahwul.com/api-reference/result/">Result</a></li>
+        <li><a href="https://sarif.cr.hahwul.com/api-reference/tool/">Tool</a></li>
+        <li><a href="https://sarif.cr.hahwul.com/api-reference/location/">Location</a></li>
+        <li><a href="https://sarif.cr.hahwul.com/api-reference/enums/">Enums</a></li>
+      </ul>
+    </div>
+  </aside>
+  <main class="docs-main">
+    <h1>Basic Usage</h1>
+    <p>This guide covers working with SARIF objects directly. Each SARIF type maps to a Crystal class with typed properties and JSON serialization.</p>
+<h2 id="creating-results">Creating Results</h2>
+<p>A <code>Result</code> is the core finding object. At minimum, it requires a <code>Message</code>:</p>
+<pre><code class="language-crystal hljs">result = Sarif::Result.new(
+  message: Sarif::Message.new(text: &quot;Unused variable 'x'&quot;)
+)
+</code></pre>
+<p>Add a rule reference and severity:</p>
+<pre><code class="language-crystal hljs">result = Sarif::Result.new(
+  message: Sarif::Message.new(text: &quot;Unused variable 'x'&quot;),
+  rule_id: &quot;LINT001&quot;,
+  level: Sarif::Level::Warning
+)
+</code></pre>
+<h2 id="adding-locations">Adding Locations</h2>
+<p>Specify where the issue was found:</p>
+<pre><code class="language-crystal hljs">result = Sarif::Result.new(
+  message: Sarif::Message.new(text: &quot;SQL injection risk&quot;),
+  rule_id: &quot;SEC001&quot;,
+  level: Sarif::Level::Error,
+  locations: [
+    Sarif::Location.new(
+      physical_location: Sarif::PhysicalLocation.new(
+        artifact_location: Sarif::ArtifactLocation.new(
+          uri: &quot;src/controllers/user_controller.cr&quot;,
+          uri_base_id: &quot;%SRCROOT%&quot;
+        ),
+        region: Sarif::Region.new(
+          start_line: 42,
+          start_column: 10,
+          end_line: 42,
+          end_column: 55
+        )
+      )
+    ),
+  ]
+)
+</code></pre>
+<h2 id="defining-rules">Defining Rules</h2>
+<p>Rules are defined on the tool's driver component:</p>
+<pre><code class="language-crystal hljs">driver = Sarif::ToolComponent.new(
+  name: &quot;SecurityScanner&quot;,
+  version: &quot;2.0.0&quot;,
+  rules: [
+    Sarif::ReportingDescriptor.new(
+      id: &quot;SEC001&quot;,
+      name: &quot;SqlInjection&quot;,
+      short_description: Sarif::MultiformatMessageString.new(
+        text: &quot;SQL Injection vulnerability&quot;
+      ),
+      help_uri: &quot;https://example.com/rules/SEC001&quot;,
+      default_configuration: Sarif::ReportingConfiguration.new(
+        level: Sarif::Level::Error
+      )
+    ),
+  ]
+)
+</code></pre>
+<h2 id="assembling-a-complete-document">Assembling a Complete Document</h2>
+<p>Combine tool, results, and other metadata into a <code>SarifLog</code>:</p>
+<pre><code class="language-crystal hljs">log = Sarif::SarifLog.new(
+  runs: [
+    Sarif::Run.new(
+      tool: Sarif::Tool.new(driver: driver),
+      results: [result],
+      artifacts: [
+        Sarif::Artifact.new(
+          location: Sarif::ArtifactLocation.new(uri: &quot;src/controllers/user_controller.cr&quot;),
+          mime_type: &quot;text/x-crystal&quot;,
+          roles: [Sarif::ArtifactRole::AnalysisTarget]
+        ),
+      ],
+      column_kind: Sarif::ColumnKind::Utf16CodeUnits
+    ),
+  ]
+)
+</code></pre>
+<h2 id="json-output">JSON Output</h2>
+<p>All SARIF types support <code>to_json</code> and <code>to_pretty_json</code>:</p>
+<pre><code class="language-crystal hljs">puts log.to_json          # compact JSON
+puts log.to_pretty_json   # indented JSON
+</code></pre>
+<p>Crystal's snake_case properties are automatically mapped to SARIF's camelCase keys. For example, <code>start_line</code> becomes <code>startLine</code> and <code>rule_id</code> becomes <code>ruleId</code>.</p>
+<h2 id="default-values">Default Values</h2>
+<p>SARIF defines default values for some fields. sarif.cr keeps these as <code>nil</code> and provides <code>effective_*</code> methods:</p>
+<pre><code class="language-crystal hljs">result = Sarif::Result.new(message: Sarif::Message.new(text: &quot;test&quot;))
+
+result.level              # =&gt; nil
+result.effective_level    # =&gt; Sarif::Level::Warning (SARIF default)
+
+result.kind               # =&gt; nil
+result.effective_kind     # =&gt; Sarif::ResultKind::Fail (SARIF default)
+</code></pre>
+<h2 id="querying-results">Querying Results</h2>
+<p><code>SarifLog</code> and <code>Run</code> provide helpers to filter and aggregate results without manual iteration.</p>
+<h3 id="filtering">Filtering</h3>
+<pre><code class="language-crystal hljs">log = Sarif.from_file(&quot;results.sarif&quot;)
+
+# Filter by level
+errors = log.find_results(level: Sarif::Level::Error)
+
+# Filter by rule ID
+rule_results = log.find_results(rule_id: &quot;SEC001&quot;)
+
+# Combine criteria (AND logic)
+critical = log.find_results(rule_id: &quot;SEC001&quot;, level: Sarif::Level::Error)
+
+# Filter by kind
+open_issues = log.find_results(kind: Sarif::ResultKind::Open)
+</code></pre>
+<p>The same methods are available on individual <code>Run</code> objects:</p>
+<pre><code class="language-crystal hljs">run = log.runs[0]
+warnings = run.find_results(level: Sarif::Level::Warning)
+</code></pre>
+<h3 id="aggregation">Aggregation</h3>
+<pre><code class="language-crystal hljs"># Count results by severity
+log.result_counts_by_level
+# =&gt; {Sarif::Level::Warning =&gt; 5, Sarif::Level::Error =&gt; 2}
+
+# Count results by rule
+log.result_counts_by_rule_id
+# =&gt; {&quot;SEC001&quot; =&gt; 3, &quot;SEC002&quot; =&gt; 4}
+</code></pre>
+<h3 id="location-search">Location Search</h3>
+<pre><code class="language-crystal hljs"># Find all locations referencing a specific file
+locations = log.find_locations_in_file(&quot;src/app.cr&quot;)
+</code></pre>
+<h2 id="nil-omission">Nil Omission</h2>
+<p>Optional fields set to <code>nil</code> are omitted from JSON output. This produces clean, minimal SARIF:</p>
+<pre><code class="language-crystal hljs">result = Sarif::Result.new(
+  message: Sarif::Message.new(text: &quot;test&quot;),
+  rule_id: &quot;R1&quot;
+)
+result.to_json
+# =&gt; {&quot;message&quot;:{&quot;text&quot;:&quot;test&quot;},&quot;ruleId&quot;:&quot;R1&quot;}
+# No &quot;level&quot;, &quot;locations&quot;, &quot;codeFlows&quot;, etc.
+</code></pre>
+
+    <div class="docs-footer">
+      <p>sarif.cr - Crystal implementation of the SARIF 2.1.0 specification</p>
+    </div>
+  </main>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+
+</body>
+</html>

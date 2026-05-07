@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="API reference for the Result class and related types.">
+  <title>Result - sarif.cr</title>
+  <meta property="og:title" content="Result">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://sarif.cr.hahwul.com/api-reference/result/">
+<meta property="og:description" content="API reference for the Result class and related types.">
+<meta property="og:image" content="https://sarif.cr.hahwul.com/og-images/api-reference-result.svg">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Result">
+<meta name="twitter:description" content="API reference for the Result class and related types.">
+<meta name="twitter:image" content="https://sarif.cr.hahwul.com/og-images/api-reference-result.svg">
+  <link rel="stylesheet" href="https://sarif.cr.hahwul.com/css/style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+  
+</head>
+<body data-section="api-reference">
+<header class="docs-header">
+  <a href="https://sarif.cr.hahwul.com/" class="logo">sarif.cr Documentation</a>
+  <nav>
+    <a href="https://sarif.cr.hahwul.com/user-guide/">User Guide</a>
+    <a href="https://sarif.cr.hahwul.com/api-reference/">API Reference</a>
+  </nav>
+  <div class="header-right">
+    <a href="https://github.com/hahwul/sarif.cr" target="_blank">GitHub</a>
+  </div>
+</header>
+<div class="docs-container">
+  <aside class="docs-sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-title">User Guide</div>
+      <ul class="sidebar-links">
+        <li><a href="https://sarif.cr.hahwul.com/user-guide/getting-started/">Getting Started</a></li>
+        <li><a href="https://sarif.cr.hahwul.com/user-guide/basic-usage/">Basic Usage</a></li>
+        <li><a href="https://sarif.cr.hahwul.com/user-guide/builder/">Builder</a></li>
+        <li><a href="https://sarif.cr.hahwul.com/user-guide/parsing-and-validation/">Parsing & Validation</a></li>
+      </ul>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-title">API Reference</div>
+      <ul class="sidebar-links">
+        <li><a href="https://sarif.cr.hahwul.com/api-reference/sarif-log/">SarifLog</a></li>
+        <li><a href="https://sarif.cr.hahwul.com/api-reference/run/">Run</a></li>
+        <li><a href="https://sarif.cr.hahwul.com/api-reference/result/">Result</a></li>
+        <li><a href="https://sarif.cr.hahwul.com/api-reference/tool/">Tool</a></li>
+        <li><a href="https://sarif.cr.hahwul.com/api-reference/location/">Location</a></li>
+        <li><a href="https://sarif.cr.hahwul.com/api-reference/enums/">Enums</a></li>
+      </ul>
+    </div>
+  </aside>
+  <main class="docs-main">
+    <h1>Result</h1>
+    <p>A <code>Result</code> represents a single finding from an analysis tool. It is the primary output object in SARIF.</p>
+<h2 id="constructor">Constructor</h2>
+<pre><code class="language-crystal hljs">Sarif::Result.new(
+  message : Sarif::Message,
+  rule_id : String? = nil,
+  rule_index : Int32? = nil,
+  level : Sarif::Level? = nil,
+  kind : Sarif::ResultKind? = nil,
+  locations : Array(Sarif::Location)? = nil,
+  # ... additional optional parameters
+)
+</code></pre>
+<h2 id="properties">Properties</h2>
+<table>
+<thead>
+<tr>
+<th>Property</th>
+<th>Type</th>
+<th>JSON Key</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>message</code></td>
+<td><code>Message</code></td>
+<td><code>message</code></td>
+<td>Description of the result (required)</td>
+</tr>
+<tr>
+<td><code>rule_id</code></td>
+<td><code>String?</code></td>
+<td><code>ruleId</code></td>
+<td>Stable identifier for the rule</td>
+</tr>
+<tr>
+<td><code>rule_index</code></td>
+<td><code>Int32?</code></td>
+<td><code>ruleIndex</code></td>
+<td>Index into <code>tool.driver.rules</code></td>
+</tr>
+<tr>
+<td><code>rule</code></td>
+<td><code>ReportingDescriptorReference?</code></td>
+<td><code>rule</code></td>
+<td>Reference to the rule</td>
+</tr>
+<tr>
+<td><code>kind</code></td>
+<td><code>ResultKind?</code></td>
+<td><code>kind</code></td>
+<td>Classification of the result</td>
+</tr>
+<tr>
+<td><code>level</code></td>
+<td><code>Level?</code></td>
+<td><code>level</code></td>
+<td>Severity level</td>
+</tr>
+<tr>
+<td><code>locations</code></td>
+<td><code>Array(Location)?</code></td>
+<td><code>locations</code></td>
+<td>Where the result was found</td>
+</tr>
+<tr>
+<td><code>analysis_target</code></td>
+<td><code>ArtifactLocation?</code></td>
+<td><code>analysisTarget</code></td>
+<td>The file being analyzed</td>
+</tr>
+<tr>
+<td><code>guid</code></td>
+<td><code>String?</code></td>
+<td><code>guid</code></td>
+<td>Unique identifier for this result</td>
+</tr>
+<tr>
+<td><code>correlation_guid</code></td>
+<td><code>String?</code></td>
+<td><code>correlationGuid</code></td>
+<td>Groups related results</td>
+</tr>
+<tr>
+<td><code>occurrence_count</code></td>
+<td><code>Int32?</code></td>
+<td><code>occurrenceCount</code></td>
+<td>Number of occurrences</td>
+</tr>
+<tr>
+<td><code>partial_fingerprints</code></td>
+<td><code>Hash(String, String)?</code></td>
+<td><code>partialFingerprints</code></td>
+<td>Partial identity data</td>
+</tr>
+<tr>
+<td><code>fingerprints</code></td>
+<td><code>Hash(String, String)?</code></td>
+<td><code>fingerprints</code></td>
+<td>Full identity data</td>
+</tr>
+<tr>
+<td><code>stacks</code></td>
+<td><code>Array(Stack)?</code></td>
+<td><code>stacks</code></td>
+<td>Call stacks</td>
+</tr>
+<tr>
+<td><code>code_flows</code></td>
+<td><code>Array(CodeFlow)?</code></td>
+<td><code>codeFlows</code></td>
+<td>Code flow paths</td>
+</tr>
+<tr>
+<td><code>graphs</code></td>
+<td><code>Array(Graph)?</code></td>
+<td><code>graphs</code></td>
+<td>Associated graphs</td>
+</tr>
+<tr>
+<td><code>graph_traversals</code></td>
+<td><code>Array(GraphTraversal)?</code></td>
+<td><code>graphTraversals</code></td>
+<td>Graph traversals</td>
+</tr>
+<tr>
+<td><code>related_locations</code></td>
+<td><code>Array(Location)?</code></td>
+<td><code>relatedLocations</code></td>
+<td>Related code locations</td>
+</tr>
+<tr>
+<td><code>suppressions</code></td>
+<td><code>Array(Suppression)?</code></td>
+<td><code>suppressions</code></td>
+<td>Suppression info</td>
+</tr>
+<tr>
+<td><code>baseline_state</code></td>
+<td><code>BaselineState?</code></td>
+<td><code>baselineState</code></td>
+<td>Baseline comparison</td>
+</tr>
+<tr>
+<td><code>rank</code></td>
+<td><code>Float64?</code></td>
+<td><code>rank</code></td>
+<td>Priority ranking (0.0 - 100.0)</td>
+</tr>
+<tr>
+<td><code>fixes</code></td>
+<td><code>Array(Fix)?</code></td>
+<td><code>fixes</code></td>
+<td>Proposed fixes</td>
+</tr>
+<tr>
+<td><code>taxa</code></td>
+<td><code>Array(ReportingDescriptorReference)?</code></td>
+<td><code>taxa</code></td>
+<td>Taxonomy references</td>
+</tr>
+<tr>
+<td><code>web_request</code></td>
+<td><code>WebRequest?</code></td>
+<td><code>webRequest</code></td>
+<td>Associated HTTP request</td>
+</tr>
+<tr>
+<td><code>web_response</code></td>
+<td><code>WebResponse?</code></td>
+<td><code>webResponse</code></td>
+<td>Associated HTTP response</td>
+</tr>
+<tr>
+<td><code>provenance</code></td>
+<td><code>ResultProvenance?</code></td>
+<td><code>provenance</code></td>
+<td>Detection history</td>
+</tr>
+<tr>
+<td><code>work_item_uris</code></td>
+<td><code>Array(String)?</code></td>
+<td><code>workItemUris</code></td>
+<td>Linked work items</td>
+</tr>
+<tr>
+<td><code>properties</code></td>
+<td><code>PropertyBag?</code></td>
+<td><code>properties</code></td>
+<td>Custom properties</td>
+</tr>
+</tbody>
+</table>
+<h2 id="instance-methods">Instance Methods</h2>
+<h3 id="effective-level"><code>#effective_level</code></h3>
+<p>Returns the level, defaulting to <code>Level::Warning</code> per the SARIF spec:</p>
+<pre><code class="language-crystal hljs">result = Sarif::Result.new(message: Sarif::Message.new(text: &quot;test&quot;))
+result.effective_level  # =&gt; Sarif::Level::Warning
+</code></pre>
+<h3 id="effective-kind"><code>#effective_kind</code></h3>
+<p>Returns the kind, defaulting to <code>ResultKind::Fail</code> per the SARIF spec:</p>
+<pre><code class="language-crystal hljs">result = Sarif::Result.new(message: Sarif::Message.new(text: &quot;test&quot;))
+result.effective_kind   # =&gt; Sarif::ResultKind::Fail
+</code></pre>
+<h2 id="related-types">Related Types</h2>
+<h3 id="suppression">Suppression</h3>
+<p>Records that a result has been suppressed.</p>
+<pre><code class="language-crystal hljs">Sarif::Suppression.new(
+  kind: Sarif::SuppressionKind::InSource,
+  status: Sarif::SuppressionStatus::Accepted,
+  justification: &quot;False positive - output is HTML-escaped&quot;
+)
+</code></pre>
+<h3 id="codeflow">CodeFlow</h3>
+<p>Represents a path through code (e.g., taint flow):</p>
+<pre><code class="language-crystal hljs">Sarif::CodeFlow.new(
+  thread_flows: [
+    Sarif::ThreadFlow.new(
+      locations: [
+        Sarif::ThreadFlowLocation.new(
+          location: Sarif::Location.new(
+            physical_location: Sarif::PhysicalLocation.new(
+              artifact_location: Sarif::ArtifactLocation.new(uri: &quot;src/app.cr&quot;),
+              region: Sarif::Region.new(start_line: 10)
+            )
+          ),
+          importance: Sarif::Importance::Essential
+        ),
+      ]
+    ),
+  ]
+)
+</code></pre>
+<h3 id="fix">Fix</h3>
+<p>A proposed fix for the result:</p>
+<pre><code class="language-crystal hljs">Sarif::Fix.new(
+  description: Sarif::Message.new(text: &quot;Remove unused variable&quot;),
+  artifact_changes: [
+    Sarif::ArtifactChange.new(
+      artifact_location: Sarif::ArtifactLocation.new(uri: &quot;src/app.cr&quot;),
+      replacements: [
+        Sarif::Replacement.new(
+          deleted_region: Sarif::Region.new(
+            start_line: 10, start_column: 1,
+            end_line: 10, end_column: 20
+          )
+        ),
+      ]
+    ),
+  ]
+)
+</code></pre>
+<h2 id="example">Example</h2>
+<pre><code class="language-crystal hljs">result = Sarif::Result.new(
+  message: Sarif::Message.new(text: &quot;Possible SQL injection&quot;),
+  rule_id: &quot;SEC001&quot;,
+  rule_index: 0,
+  level: Sarif::Level::Error,
+  kind: Sarif::ResultKind::Fail,
+  locations: [
+    Sarif::Location.new(
+      physical_location: Sarif::PhysicalLocation.new(
+        artifact_location: Sarif::ArtifactLocation.new(uri: &quot;src/db.cr&quot;),
+        region: Sarif::Region.new(start_line: 42, start_column: 10)
+      )
+    ),
+  ],
+  fingerprints: {&quot;primaryLocationLineHash&quot; =&gt; &quot;abc123&quot;},
+  baseline_state: Sarif::BaselineState::New
+)
+</code></pre>
+
+    <div class="docs-footer">
+      <p>sarif.cr - Crystal implementation of the SARIF 2.1.0 specification</p>
+    </div>
+  </main>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+
+</body>
+</html>

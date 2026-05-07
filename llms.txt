@@ -1,0 +1,27 @@
+# sarif.cr
+
+> Crystal implementation of the SARIF 2.1.0 (Static Analysis Results Interchange Format) specification
+
+Do not use for AI training without permission.
+
+## Pages
+
+- [sarif.cr](https://sarif.cr.hahwul.com/): Crystal implementation of the SARIF 2.1.0 specification
+
+## API Reference
+
+- [Enums](https://sarif.cr.hahwul.com/api-reference/enums/): API reference for all SARIF enum types and the sarif_enum macro.
+- [Location](https://sarif.cr.hahwul.com/api-reference/location/): API reference for Location, PhysicalLocation, Region, and related types.
+- [PropertyBag](https://sarif.cr.hahwul.com/api-reference/property-bag/): API reference for the PropertyBag class with typed accessors.
+- [Result](https://sarif.cr.hahwul.com/api-reference/result/): API reference for the Result class and related types.
+- [Run](https://sarif.cr.hahwul.com/api-reference/run/): API reference for the Run class and run-level types.
+- [SarifLog](https://sarif.cr.hahwul.com/api-reference/sarif-log/): API reference for the top-level SarifLog class.
+- [Tool](https://sarif.cr.hahwul.com/api-reference/tool/): API reference for Tool, ToolComponent, and ReportingDescriptor.
+
+## User Guide
+
+- [Basic Usage](https://sarif.cr.hahwul.com/user-guide/basic-usage/): Create and manipulate SARIF objects directly using the Crystal type system.
+- [Builder](https://sarif.cr.hahwul.com/user-guide/builder/): Use the fluent builder API to construct SARIF documents with minimal boilerplate.
+- [Getting Started](https://sarif.cr.hahwul.com/user-guide/getting-started/): Install sarif.cr and create your first SARIF document.
+- [Parsing & Validation](https://sarif.cr.hahwul.com/user-guide/parsing-and-validation/): Read existing SARIF files and validate them against the specification.
+

@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Use the fluent builder API to construct SARIF documents with minimal boilerplate.">
+  <title>Builder - sarif.cr</title>
+  <meta property="og:title" content="Builder">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://sarif.cr.hahwul.com/user-guide/builder/">
+<meta property="og:description" content="Use the fluent builder API to construct SARIF documents with minimal boilerplate.">
+<meta property="og:image" content="https://sarif.cr.hahwul.com/og-images/user-guide-builder.svg">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Builder">
+<meta name="twitter:description" content="Use the fluent builder API to construct SARIF documents with minimal boilerplate.">
+<meta name="twitter:image" content="https://sarif.cr.hahwul.com/og-images/user-guide-builder.svg">
+  <link rel="stylesheet" href="https://sarif.cr.hahwul.com/css/style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+  
+</head>
+<body data-section="user-guide">
+<header class="docs-header">
+  <a href="https://sarif.cr.hahwul.com/" class="logo">sarif.cr Documentation</a>
+  <nav>
+    <a href="https://sarif.cr.hahwul.com/user-guide/">User Guide</a>
+    <a href="https://sarif.cr.hahwul.com/api-reference/">API Reference</a>
+  </nav>
+  <div class="header-right">
+    <a href="https://github.com/hahwul/sarif.cr" target="_blank">GitHub</a>
+  </div>
+</header>
+<div class="docs-container">
+  <aside class="docs-sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-title">User Guide</div>
+      <ul class="sidebar-links">
+        <li><a href="https://sarif.cr.hahwul.com/user-guide/getting-started/">Getting Started</a></li>
+        <li><a href="https://sarif.cr.hahwul.com/user-guide/basic-usage/">Basic Usage</a></li>
+        <li><a href="https://sarif.cr.hahwul.com/user-guide/builder/">Builder</a></li>
+        <li><a href="https://sarif.cr.hahwul.com/user-guide/parsing-and-validation/">Parsing & Validation</a></li>
+      </ul>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-title">API Reference</div>
+      <ul class="sidebar-links">
+        <li><a href="https://sarif.cr.hahwul.com/api-reference/sarif-log/">SarifLog</a></li>
+        <li><a href="https://sarif.cr.hahwul.com/api-reference/run/">Run</a></li>
+        <li><a href="https://sarif.cr.hahwul.com/api-reference/result/">Result</a></li>
+        <li><a href="https://sarif.cr.hahwul.com/api-reference/tool/">Tool</a></li>
+        <li><a href="https://sarif.cr.hahwul.com/api-reference/location/">Location</a></li>
+        <li><a href="https://sarif.cr.hahwul.com/api-reference/enums/">Enums</a></li>
+      </ul>
+    </div>
+  </aside>
+  <main class="docs-main">
+    <h1>Builder</h1>
+    <p>The <code>Sarif::Builder</code> provides a fluent API for constructing SARIF documents. It handles object wiring (tool, rules, results, ruleIndex linking) so you can focus on your data.</p>
+<h2 id="basic-usage">Basic Usage</h2>
+<pre><code class="language-crystal hljs">log = Sarif::Builder.build do |b|
+  b.run(&quot;MyTool&quot;, &quot;1.0.0&quot;) do |r|
+    r.result(&quot;Issue found&quot;, level: Sarif::Level::Warning)
+  end
+end
+</code></pre>
+<h2 id="adding-rules">Adding Rules</h2>
+<p>Define rules before results. The builder auto-links <code>ruleIndex</code> when a result references a <code>rule_id</code>:</p>
+<pre><code class="language-crystal hljs">log = Sarif::Builder.build do |b|
+  b.run(&quot;Linter&quot;) do |r|
+    r.rule(&quot;R001&quot;, name: &quot;NoUnused&quot;,
+           short_description: &quot;No unused variables&quot;,
+           level: Sarif::Level::Warning)
+    r.rule(&quot;R002&quot;, name: &quot;NoShadow&quot;,
+           short_description: &quot;No shadowed variables&quot;,
+           level: Sarif::Level::Error)
+
+    r.result(&quot;Variable 'x' is unused&quot;,
+             rule_id: &quot;R001&quot;, level: Sarif::Level::Warning,
+             uri: &quot;src/app.cr&quot;, start_line: 15)
+    r.result(&quot;Variable 'i' shadows outer 'i'&quot;,
+             rule_id: &quot;R002&quot;, level: Sarif::Level::Error,
+             uri: &quot;src/loop.cr&quot;, start_line: 22, start_column: 5)
+  end
+end
+</code></pre>
+<p>The resulting JSON will have <code>ruleIndex: 0</code> for the first result and <code>ruleIndex: 1</code> for the second.</p>
+<h2 id="result-builder-block">Result Builder Block</h2>
+<p>For more control, use the block form:</p>
+<pre><code class="language-crystal hljs">log = Sarif::Builder.build do |b|
+  b.run(&quot;Tool&quot;) do |r|
+    r.result do |rb|
+      rb.message(&quot;Complex issue&quot;, markdown: &quot;**Complex** issue&quot;)
+      rb.rule_id(&quot;R1&quot;)
+      rb.level(Sarif::Level::Error)
+      rb.location(uri: &quot;file.cr&quot;, start_line: 5, end_line: 10)
+      rb.related_location(uri: &quot;other.cr&quot;, start_line: 20,
+                          message_text: &quot;Related code&quot;, id: 1)
+      rb.fingerprint(&quot;primary&quot;, &quot;hash123&quot;)
+    end
+  end
+end
+</code></pre>
+<h2 id="adding-artifacts">Adding Artifacts</h2>
+<p>Register analyzed files:</p>
+<pre><code class="language-crystal hljs">log = Sarif::Builder.build do |b|
+  b.run(&quot;Scanner&quot;) do |r|
+    r.artifact(&quot;src/main.cr&quot;, mime_type: &quot;text/x-crystal&quot;)
+    r.artifact(&quot;src/utils.cr&quot;, mime_type: &quot;text/x-crystal&quot;)
+    r.result(&quot;Issue in main&quot;, uri: &quot;src/main.cr&quot;, start_line: 1)
+  end
+end
+</code></pre>
+<h2 id="adding-invocations">Adding Invocations</h2>
+<p>Record how the tool was invoked:</p>
+<pre><code class="language-crystal hljs">log = Sarif::Builder.build do |b|
+  b.run(&quot;Scanner&quot;) do |r|
+    r.invocation(true, &quot;scanner --check src/&quot;)
+    r.result(&quot;Found issue&quot;, level: Sarif::Level::Warning)
+  end
+end
+</code></pre>
+<h2 id="multiple-runs">Multiple Runs</h2>
+<p>A single SARIF log can contain results from multiple tools:</p>
+<pre><code class="language-crystal hljs">log = Sarif::Builder.build do |b|
+  b.run(&quot;Linter&quot;, &quot;1.0&quot;) do |r|
+    r.result(&quot;Style issue&quot;, level: Sarif::Level::Note)
+  end
+  b.run(&quot;SecurityScanner&quot;, &quot;2.0&quot;) do |r|
+    r.result(&quot;Vulnerability found&quot;, level: Sarif::Level::Error)
+  end
+end
+</code></pre>
+<h2 id="code-flows">Code Flows</h2>
+<p>Build code flows to describe data or control flow paths:</p>
+<pre><code class="language-crystal hljs">log = Sarif::Builder.build do |b|
+  b.run(&quot;TaintAnalyzer&quot;) do |r|
+    r.result do |rb|
+      rb.message(&quot;Tainted data flows to SQL query&quot;)
+      rb.rule_id(&quot;SEC001&quot;)
+      rb.level(Sarif::Level::Error)
+
+      rb.code_flow(&quot;Taint flow&quot;) do |cf|
+        cf.thread_flow(&quot;main&quot;) do |tf|
+          tf.location(&quot;src/input.cr&quot;, 5, message: &quot;User input received&quot;)
+          tf.location(&quot;src/transform.cr&quot;, 12, message: &quot;Data transformed&quot;)
+          tf.location(&quot;src/query.cr&quot;, 20,
+            message: &quot;Used in SQL query&quot;,
+            importance: Sarif::Importance::Essential)
+        end
+      end
+    end
+  end
+end
+</code></pre>
+<h2 id="fixes">Fixes</h2>
+<p>Describe suggested fixes with artifact changes and replacements:</p>
+<pre><code class="language-crystal hljs">log = Sarif::Builder.build do |b|
+  b.run(&quot;Linter&quot;) do |r|
+    r.result do |rb|
+      rb.message(&quot;Unused variable 'x'&quot;)
+      rb.rule_id(&quot;LINT001&quot;)
+
+      rb.fix(&quot;Remove unused variable&quot;) do |f|
+        f.artifact_change(&quot;src/app.cr&quot;) do |ac|
+          ac.replacement(10, 1, 10, 20, inserted_text: &quot;&quot;)
+        end
+      end
+    end
+  end
+end
+</code></pre>
+<h2 id="suppressions">Suppressions</h2>
+<p>Mark results as suppressed:</p>
+<pre><code class="language-crystal hljs">log = Sarif::Builder.build do |b|
+  b.run(&quot;Scanner&quot;) do |r|
+    r.result do |rb|
+      rb.message(&quot;Known false positive&quot;)
+      rb.rule_id(&quot;FP001&quot;)
+      rb.suppression(
+        Sarif::SuppressionKind::InSource,
+        justification: &quot;Verified false positive&quot;,
+        status: Sarif::SuppressionStatus::Accepted
+      )
+    end
+  end
+end
+</code></pre>
+<h2 id="complete-example">Complete Example</h2>
+<pre><code class="language-crystal hljs">log = Sarif::Builder.build do |b|
+  b.run(&quot;CrystalLint&quot;, &quot;2.0.0&quot;) do |r|
+    r.rule(&quot;CL001&quot;, name: &quot;UnusedVar&quot;,
+           short_description: &quot;Unused variable detected&quot;,
+           help_uri: &quot;https://example.com/rules/CL001&quot;)
+    r.rule(&quot;CL002&quot;, name: &quot;ShadowVar&quot;,
+           short_description: &quot;Variable shadows outer scope&quot;)
+
+    r.artifact(&quot;src/app.cr&quot;, mime_type: &quot;text/x-crystal&quot;)
+    r.artifact(&quot;src/loop.cr&quot;, mime_type: &quot;text/x-crystal&quot;)
+
+    r.invocation(true, &quot;crystal-lint src/&quot;)
+
+    r.result(&quot;Variable 'x' is never used&quot;,
+             rule_id: &quot;CL001&quot;, level: Sarif::Level::Warning,
+             uri: &quot;src/app.cr&quot;, start_line: 15)
+    r.result(&quot;Variable 'i' shadows outer 'i'&quot;,
+             rule_id: &quot;CL002&quot;, level: Sarif::Level::Note,
+             uri: &quot;src/loop.cr&quot;, start_line: 22, start_column: 5)
+  end
+end
+
+puts log.to_pretty_json
+</code></pre>
+
+    <div class="docs-footer">
+      <p>sarif.cr - Crystal implementation of the SARIF 2.1.0 specification</p>
+    </div>
+  </main>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+
+</body>
+</html>
