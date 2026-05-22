@@ -101,8 +101,8 @@ describe Sarif::Builder do
 
   it "builds multiple runs" do
     log = Sarif::Builder.build do |b|
-      b.run("Tool1") { |r| r.result("Issue 1") }
-      b.run("Tool2") { |r| r.result("Issue 2") }
+      b.run("Tool1", &.result("Issue 1"))
+      b.run("Tool2", &.result("Issue 2"))
     end
     log.runs.size.should eq(2)
     log.runs[0].tool.driver.name.should eq("Tool1")

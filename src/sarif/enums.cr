@@ -2,9 +2,9 @@ module Sarif
   # Macro for defining SARIF enums with bidirectional JSON serialization.
   # Maps Crystal enum values to their camelCase SARIF string representations.
   macro sarif_enum(name, mapping)
-    enum {{name}}
+    enum {{ name }}
       {% for key, _value in mapping %}
-        {{key}}
+        {{ key }}
       {% end %}
 
       def to_json(json : JSON::Builder) : Nil
@@ -14,7 +14,7 @@ module Sarif
       def to_s_sarif : String
         case self
         {% for key, value in mapping %}
-        when {{key}} then {{value}}
+        when {{ key }} then {{ value }}
         {% end %}
         else
           raise "Unknown #{self.class} value: #{self}"
@@ -25,7 +25,7 @@ module Sarif
         str = pull.read_string
         case str
         {% for key, value in mapping %}
-        when {{value}} then {{key}}
+        when {{ value }} then {{ key }}
         {% end %}
         else
           raise "Unknown #{self} value: #{str}"
@@ -35,7 +35,7 @@ module Sarif
       def self.parse_sarif(str : String) : self
         case str
         {% for key, value in mapping %}
-        when {{value}} then {{key}}
+        when {{ value }} then {{ key }}
         {% end %}
         else
           raise "Unknown #{self} value: #{str}"

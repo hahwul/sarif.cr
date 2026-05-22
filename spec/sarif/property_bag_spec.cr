@@ -172,7 +172,7 @@ describe Sarif::PropertyBag do
       bag = Sarif::PropertyBag.new
       bag["x"] = JSON::Any.new("1")
       bag["y"] = JSON::Any.new("2")
-      bag.keys.sort.should eq(["x", "y"])
+      bag.keys.sort!.should eq(["x", "y"])
     end
   end
 

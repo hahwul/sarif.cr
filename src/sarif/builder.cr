@@ -47,7 +47,7 @@ module Sarif
 
   # :nodoc:
   protected def self.find_rule_index(rules : Array(ReportingDescriptor), rule_id : String?) : Int32?
-    return nil unless rule_id
+    return unless rule_id
     rules.index { |r| r.id == rule_id }
   end
 

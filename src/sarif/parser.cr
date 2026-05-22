@@ -54,9 +54,9 @@ module Sarif
       check_size!(File.size(path).to_i64, max_size, "File")
     end
     File.open(path) { |io| parse_json(io) }
-  rescue ex : File::NotFoundError
+  rescue File::NotFoundError
     raise Error.new("File not found: #{path}")
-  rescue ex : File::AccessDeniedError
+  rescue File::AccessDeniedError
     raise Error.new("Permission denied: #{path}")
   rescue ex : Sarif::Error
     raise ex

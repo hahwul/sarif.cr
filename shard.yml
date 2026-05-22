@@ -1,5 +1,12 @@
 name: sarif
 version: 0.2.0
+description: |
+  A Crystal implementation of the Static Analysis Results Interchange
+  Format (SARIF). Parses, validates, and serializes SARIF 2.1.0 log files
+  produced by static analysis tools.
+repository: https://github.com/hahwul/sarif.cr
+homepage: https://github.com/hahwul/sarif.cr
+documentation: https://github.com/hahwul/sarif.cr#readme
 
 authors:
   - hahwul <hahwul@gmail.com>
@@ -7,3 +14,8 @@ authors:
 crystal: '>= 1.19.1'
 
 license: MIT
+
+development_dependencies:
+  ameba:
+    github: crystal-ameba/ameba
+    branch: master
