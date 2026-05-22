@@ -197,7 +197,7 @@ describe Sarif::Validator do
     )
     result = Sarif::Validator.new.validate(log)
     result.valid?.should be_false
-    result.errors.any? { |e| e.path.includes?("relatedLocations") }.should be_true
+    result.errors.any?(&.path.includes?("relatedLocations")).should be_true
   end
 
   it "detects endLine < startLine" do
@@ -542,7 +542,7 @@ describe Sarif::Validator do
     )
     result = Sarif::Validator.new.validate(log)
     result.valid?.should be_false
-    result.errors.any? { |e| e.path.includes?("extensions[0]") }.should be_true
+    result.errors.any?(&.path.includes?("extensions[0]")).should be_true
   end
 
   # "at least one of A or B" constraint validations

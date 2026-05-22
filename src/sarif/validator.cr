@@ -626,53 +626,53 @@ module Sarif
 
     private def validate_external_property_file_references(refs : ExternalPropertyFileReferences, path : String,
                                                            errors : Array(ValidationError))
-      if ref = refs.conversion
-        validate_external_property_file_reference(ref, "#{path}.conversion", errors)
+      if conversion = refs.conversion
+        validate_external_property_file_reference(conversion, "#{path}.conversion", errors)
       end
-      refs.graphs.try &.each_with_index do |ref, i|
-        validate_external_property_file_reference(ref, "#{path}.graphs[#{i}]", errors)
+      refs.graphs.try &.each_with_index do |item, i|
+        validate_external_property_file_reference(item, "#{path}.graphs[#{i}]", errors)
       end
-      if ref = refs.externalized_properties
-        validate_external_property_file_reference(ref, "#{path}.externalizedProperties", errors)
+      if ext_props = refs.externalized_properties
+        validate_external_property_file_reference(ext_props, "#{path}.externalizedProperties", errors)
       end
-      refs.artifacts.try &.each_with_index do |ref, i|
-        validate_external_property_file_reference(ref, "#{path}.artifacts[#{i}]", errors)
+      refs.artifacts.try &.each_with_index do |item, i|
+        validate_external_property_file_reference(item, "#{path}.artifacts[#{i}]", errors)
       end
-      refs.invocations.try &.each_with_index do |ref, i|
-        validate_external_property_file_reference(ref, "#{path}.invocations[#{i}]", errors)
+      refs.invocations.try &.each_with_index do |item, i|
+        validate_external_property_file_reference(item, "#{path}.invocations[#{i}]", errors)
       end
-      refs.logical_locations.try &.each_with_index do |ref, i|
-        validate_external_property_file_reference(ref, "#{path}.logicalLocations[#{i}]", errors)
+      refs.logical_locations.try &.each_with_index do |item, i|
+        validate_external_property_file_reference(item, "#{path}.logicalLocations[#{i}]", errors)
       end
-      refs.thread_flow_locations.try &.each_with_index do |ref, i|
-        validate_external_property_file_reference(ref, "#{path}.threadFlowLocations[#{i}]", errors)
+      refs.thread_flow_locations.try &.each_with_index do |item, i|
+        validate_external_property_file_reference(item, "#{path}.threadFlowLocations[#{i}]", errors)
       end
-      refs.results.try &.each_with_index do |ref, i|
-        validate_external_property_file_reference(ref, "#{path}.results[#{i}]", errors)
+      refs.results.try &.each_with_index do |item, i|
+        validate_external_property_file_reference(item, "#{path}.results[#{i}]", errors)
       end
-      refs.taxonomies.try &.each_with_index do |ref, i|
-        validate_external_property_file_reference(ref, "#{path}.taxonomies[#{i}]", errors)
+      refs.taxonomies.try &.each_with_index do |item, i|
+        validate_external_property_file_reference(item, "#{path}.taxonomies[#{i}]", errors)
       end
-      refs.addresses.try &.each_with_index do |ref, i|
-        validate_external_property_file_reference(ref, "#{path}.addresses[#{i}]", errors)
+      refs.addresses.try &.each_with_index do |item, i|
+        validate_external_property_file_reference(item, "#{path}.addresses[#{i}]", errors)
       end
-      if ref = refs.driver
-        validate_external_property_file_reference(ref, "#{path}.driver", errors)
+      if driver = refs.driver
+        validate_external_property_file_reference(driver, "#{path}.driver", errors)
       end
-      refs.extensions.try &.each_with_index do |ref, i|
-        validate_external_property_file_reference(ref, "#{path}.extensions[#{i}]", errors)
+      refs.extensions.try &.each_with_index do |item, i|
+        validate_external_property_file_reference(item, "#{path}.extensions[#{i}]", errors)
       end
-      refs.policies.try &.each_with_index do |ref, i|
-        validate_external_property_file_reference(ref, "#{path}.policies[#{i}]", errors)
+      refs.policies.try &.each_with_index do |item, i|
+        validate_external_property_file_reference(item, "#{path}.policies[#{i}]", errors)
       end
-      refs.translations.try &.each_with_index do |ref, i|
-        validate_external_property_file_reference(ref, "#{path}.translations[#{i}]", errors)
+      refs.translations.try &.each_with_index do |item, i|
+        validate_external_property_file_reference(item, "#{path}.translations[#{i}]", errors)
       end
-      refs.web_requests.try &.each_with_index do |ref, i|
-        validate_external_property_file_reference(ref, "#{path}.webRequests[#{i}]", errors)
+      refs.web_requests.try &.each_with_index do |item, i|
+        validate_external_property_file_reference(item, "#{path}.webRequests[#{i}]", errors)
       end
-      refs.web_responses.try &.each_with_index do |ref, i|
-        validate_external_property_file_reference(ref, "#{path}.webResponses[#{i}]", errors)
+      refs.web_responses.try &.each_with_index do |item, i|
+        validate_external_property_file_reference(item, "#{path}.webResponses[#{i}]", errors)
       end
     end
 
