@@ -65,6 +65,16 @@ else
 end
 ```
 
+## Examples
+
+Runnable examples live in [`examples/`](./examples):
+
+```bash
+crystal run examples/build.cr               # Builder DSL: run + rule + result
+crystal run examples/parse_and_validate.cr  # parse / parse! / Validator
+crystal run examples/round_trip.cr          # build -> JSON -> parse -> validate
+```
+
 ## Contributing
 
 1. Fork it (<https://github.com/hahwul/sarif.cr/fork>)
