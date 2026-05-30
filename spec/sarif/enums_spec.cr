@@ -22,6 +22,33 @@ describe "Sarif Enums" do
         Sarif::Level.from_json(json).should eq(val)
       end
     end
+
+    it "raises Sarif::Error for an unknown value via from_json (pull parser) in strict mode" do
+      Sarif.with_strict_enums do
+        expect_raises(Sarif::Error, /Unknown/) do
+          Sarif::Level.from_json(JSON::PullParser.new(%("bogus")))
+        end
+      end
+    end
+
+    it "raises Sarif::Error for an unknown value via parse_sarif in strict mode" do
+      Sarif.with_strict_enums do
+        expect_raises(Sarif::Error, /Unknown/) do
+          Sarif::Level.parse_sarif("bogus")
+        end
+      end
+    end
+
+    it "maps an unknown value to the Unknown sentinel by default (tolerant)" do
+      Sarif::Level.parse_sarif("bogus").should eq(Sarif::Level::Unknown)
+      Sarif::Level.from_json(JSON::PullParser.new(%("bogus"))).should eq(Sarif::Level::Unknown)
+      Sarif::Level.new(JSON::PullParser.new(%("critical"))).should eq(Sarif::Level::Unknown)
+    end
+
+    it "round-trips the Unknown sentinel through JSON" do
+      Sarif::Level::Unknown.to_json.should eq(%("unknown"))
+      Sarif::Level.from_json(%("unknown")).should eq(Sarif::Level::Unknown)
+    end
   end
 
   describe Sarif::ResultKind do
@@ -97,6 +124,71 @@ describe "Sarif Enums" do
     it "round-trips through JSON" do
       Sarif::ToolComponentContent.values.each do |val|
         Sarif::ToolComponentContent.from_json(val.to_json).should eq(val)
+      end
+    end
+  end
+
+  describe "Sarif.strict_enums" do
+    it "defaults to false (tolerant)" do
+      Sarif.strict_enums.should be_false
+    end
+
+    it "is restored after with_strict_enums even when the block raises" do
+      Sarif.strict_enums.should be_false
+      expect_raises(Sarif::Error) do
+        Sarif.with_strict_enums do
+          Sarif.strict_enums.should be_true
+          Sarif::Level.parse_sarif("nope")
+        end
+      end
+      Sarif.strict_enums.should be_false
+    end
+  end
+
+  describe "tolerant full-document parsing" do
+    doc = <<-JSON
+      {
+        "version": "2.1.0",
+        "runs": [
+          {
+            "tool": {"driver": {"name": "MyTool"}},
+            "results": [
+              {
+                "message": {"text": "x"},
+                "level": "critical",
+                "kind": "futureKind",
+                "baselineState": "weird"
+              }
+            ]
+          }
+        ]
+      }
+      JSON
+
+    it "does not raise on an unknown level/kind and yields a parseable log" do
+      log = Sarif::SarifLog.from_json(doc)
+      result = log.runs.first.results.not_nil!.first
+      result.level.should eq(Sarif::Level::Unknown)
+      result.kind.should eq(Sarif::ResultKind::Unknown)
+      result.baseline_state.should eq(Sarif::BaselineState::Unknown)
+    end
+
+    it "is reachable through Sarif.parse without raising" do
+      log = Sarif.parse(doc)
+      log.runs.first.results.not_nil!.first.level.should eq(Sarif::Level::Unknown)
+    end
+
+    it "re-serializes the sentinel as \"unknown\" without crashing" do
+      log = Sarif::SarifLog.from_json(doc)
+      json = log.to_json
+      json.should contain(%("level":"unknown"))
+    end
+
+    it "raises Sarif::Error in strict mode" do
+      Sarif.with_strict_enums do
+        expect_raises(Sarif::Error, /Unknown/) do
+          Sarif::SarifLog.from_json(doc)
+        end
       end
     end
   end

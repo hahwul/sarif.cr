@@ -121,4 +121,89 @@ describe Sarif::Result do
       result.valid?.should be_true
     end
   end
+
+  describe "#effective_level (SARIF 2.1.0 §3.27.10)" do
+    it "returns the explicit level when present" do
+      result = Sarif::Result.new(message: Sarif::Message.new(text: "test"), level: Sarif::Level::Error)
+      result.effective_level.should eq(Sarif::Level::Error)
+    end
+
+    it "returns none for a pass result with no explicit level" do
+      result = Sarif::Result.new(message: Sarif::Message.new(text: "test"), kind: Sarif::ResultKind::Pass)
+      result.effective_level.should eq(Sarif::Level::None)
+    end
+
+    it "returns none for a notApplicable result with no explicit level" do
+      result = Sarif::Result.new(message: Sarif::Message.new(text: "test"), kind: Sarif::ResultKind::NotApplicable)
+      result.effective_level.should eq(Sarif::Level::None)
+    end
+
+    it "falls back to warning when kind is fail and no rule context is given" do
+      result = Sarif::Result.new(message: Sarif::Message.new(text: "test"), kind: Sarif::ResultKind::Fail)
+      result.effective_level.should eq(Sarif::Level::Warning)
+    end
+
+    it "falls back to warning when kind is absent and no rule context is given" do
+      result = Sarif::Result.new(message: Sarif::Message.new(text: "test"))
+      result.effective_level.should eq(Sarif::Level::Warning)
+    end
+
+    it "inherits the rule's defaultConfiguration.level (resolved by ruleId)" do
+      rule = Sarif::ReportingDescriptor.new(
+        id: "RULE001",
+        default_configuration: Sarif::ReportingConfiguration.new(level: Sarif::Level::Error)
+      )
+      run = Sarif::Run.new(
+        tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool", rules: [rule])),
+        results: [Sarif::Result.new(message: Sarif::Message.new(text: "test"), rule_id: "RULE001")]
+      )
+      result = run.results.not_nil!.first
+      result.effective_level(run).should eq(Sarif::Level::Error)
+    end
+
+    it "inherits the rule's defaultConfiguration.level (resolved by ruleIndex)" do
+      rule = Sarif::ReportingDescriptor.new(
+        id: "RULE001",
+        default_configuration: Sarif::ReportingConfiguration.new(level: Sarif::Level::Note)
+      )
+      run = Sarif::Run.new(
+        tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool", rules: [rule])),
+        results: [Sarif::Result.new(message: Sarif::Message.new(text: "test"), rule_index: 0)]
+      )
+      result = run.results.not_nil!.first
+      result.effective_level(run).should eq(Sarif::Level::Note)
+    end
+
+    it "falls back to warning when the rule cannot be resolved in the run" do
+      run = Sarif::Run.new(
+        tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+        results: [Sarif::Result.new(message: Sarif::Message.new(text: "test"), rule_id: "MISSING")]
+      )
+      result = run.results.not_nil!.first
+      result.effective_level(run).should eq(Sarif::Level::Warning)
+    end
+
+    it "falls back to warning when the rule has no defaultConfiguration.level" do
+      rule = Sarif::ReportingDescriptor.new(id: "RULE001")
+      run = Sarif::Run.new(
+        tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool", rules: [rule])),
+        results: [Sarif::Result.new(message: Sarif::Message.new(text: "test"), rule_id: "RULE001")]
+      )
+      result = run.results.not_nil!.first
+      result.effective_level(run).should eq(Sarif::Level::Warning)
+    end
+
+    it "still returns none for a non-fail kind even with run context" do
+      rule = Sarif::ReportingDescriptor.new(
+        id: "RULE001",
+        default_configuration: Sarif::ReportingConfiguration.new(level: Sarif::Level::Error)
+      )
+      run = Sarif::Run.new(
+        tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool", rules: [rule])),
+        results: [Sarif::Result.new(message: Sarif::Message.new(text: "test"), rule_id: "RULE001", kind: Sarif::ResultKind::Pass)]
+      )
+      result = run.results.not_nil!.first
+      result.effective_level(run).should eq(Sarif::Level::None)
+    end
+  end
 end

@@ -9,40 +9,40 @@ require "../src/sarif"
 # can inspect when you want soft validation.
 
 sarif_json = <<-JSON
-{
-  "version": "2.1.0",
-  "$schema": "https://docs.oasis-open.org/sarif/sarif/v2.1.0/cos02/schemas/sarif-schema-2.1.0.json",
-  "runs": [
-    {
-      "tool": {
-        "driver": {
-          "name": "DemoScanner",
-          "version": "0.1.0",
-          "rules": [
-            { "id": "DEMO001", "name": "HardcodedSecret" }
-          ]
-        }
-      },
-      "results": [
-        {
-          "ruleId": "DEMO001",
-          "ruleIndex": 0,
-          "level": "error",
-          "message": { "text": "Hardcoded AWS access key detected" },
-          "locations": [
-            {
-              "physicalLocation": {
-                "artifactLocation": { "uri": "config/app.yml" },
-                "region": { "startLine": 12 }
+  {
+    "version": "2.1.0",
+    "$schema": "https://docs.oasis-open.org/sarif/sarif/v2.1.0/cos02/schemas/sarif-schema-2.1.0.json",
+    "runs": [
+      {
+        "tool": {
+          "driver": {
+            "name": "DemoScanner",
+            "version": "0.1.0",
+            "rules": [
+              { "id": "DEMO001", "name": "HardcodedSecret" }
+            ]
+          }
+        },
+        "results": [
+          {
+            "ruleId": "DEMO001",
+            "ruleIndex": 0,
+            "level": "error",
+            "message": { "text": "Hardcoded AWS access key detected" },
+            "locations": [
+              {
+                "physicalLocation": {
+                  "artifactLocation": { "uri": "config/app.yml" },
+                  "region": { "startLine": 12 }
+                }
               }
-            }
-          ]
-        }
-      ]
-    }
-  ]
-}
-JSON
+            ]
+          }
+        ]
+      }
+    ]
+  }
+  JSON
 
 puts "--- parse ---"
 log = Sarif.parse(sarif_json)
