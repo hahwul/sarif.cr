@@ -116,7 +116,7 @@ module Sarif
 
     def results_by_level(level : Level) : Array(Result)
       return [] of Result unless rs = results
-      rs.select { |r| r.effective_level == level }
+      rs.select { |r| r.effective_level(self) == level }
     end
 
     def find_results(rule_id : String? = nil, level : Level? = nil,
@@ -124,7 +124,7 @@ module Sarif
       return [] of Result unless rs = results
       rs.select do |r|
         next false if rule_id && r.rule_id != rule_id
-        next false if level && r.effective_level != level
+        next false if level && r.effective_level(self) != level
         next false if kind && r.effective_kind != kind
         true
       end
@@ -134,7 +134,7 @@ module Sarif
       counts = {} of Level => Int32
       return counts unless rs = results
       rs.each do |r|
-        lvl = r.effective_level
+        lvl = r.effective_level(self)
         counts[lvl] = (counts[lvl]? || 0) + 1
       end
       counts

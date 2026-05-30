@@ -50,8 +50,16 @@ module Sarif
     end
 
     # Returns results matching the given severity level across all runs.
+    # The effective level is resolved against each result's own run so that
+    # rule `defaultConfiguration.level` inheritance is honored.
     def results_by_level(level : Level) : Array(Result)
-      all_results.select { |r| r.effective_level == level }
+      matched = [] of Result
+      runs.each do |run|
+        run.results.try &.each do |r|
+          matched << r if r.effective_level(run) == level
+        end
+      end
+      matched
     end
 
     # Returns results matching the given rule ID across all runs.
@@ -63,12 +71,16 @@ module Sarif
     # All provided criteria must match (AND logic). Omitted criteria are ignored.
     def find_results(rule_id : String? = nil, level : Level? = nil,
                      kind : ResultKind? = nil) : Array(Result)
-      all_results.select do |r|
-        next false if rule_id && r.rule_id != rule_id
-        next false if level && r.effective_level != level
-        next false if kind && r.effective_kind != kind
-        true
+      matched = [] of Result
+      runs.each do |run|
+        run.results.try &.each do |r|
+          next if rule_id && r.rule_id != rule_id
+          next if level && r.effective_level(run) != level
+          next if kind && r.effective_kind != kind
+          matched << r
+        end
       end
+      matched
     end
 
     # Returns all locations that reference the given file URI across all results.
@@ -89,9 +101,11 @@ module Sarif
     # Returns a hash mapping each severity level to the count of results at that level.
     def result_counts_by_level : Hash(Level, Int32)
       counts = {} of Level => Int32
-      all_results.each do |r|
-        lvl = r.effective_level
-        counts[lvl] = (counts[lvl]? || 0) + 1
+      runs.each do |run|
+        run.results.try &.each do |r|
+          lvl = r.effective_level(run)
+          counts[lvl] = (counts[lvl]? || 0) + 1
+        end
       end
       counts
     end

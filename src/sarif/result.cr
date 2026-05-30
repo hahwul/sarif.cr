@@ -112,8 +112,52 @@ module Sarif
                    @properties : PropertyBag? = nil)
     end
 
-    def effective_level : Level
-      level || Level::Warning
+    # Computes the effective severity level per the SARIF 2.1.0 §3.27.10
+    # default-level algorithm.
+    #
+    # - If `level` is set explicitly, it is returned.
+    # - Else, if `kind` is present and not `fail` (pass/notApplicable/review/
+    #   open/informational), the effective level is `none`.
+    # - Else (kind is `fail` or absent) the level is inherited from the
+    #   associated rule's `defaultConfiguration.level` when a `run` is supplied
+    #   and the rule is resolvable, otherwise it falls back to `warning`.
+    #
+    # See: [SARIF 2.1.0 §3.27.10](https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html#_Toc34317648)
+    #
+    # The `run` argument is optional for backward compatibility: when omitted,
+    # the kind-based part of the algorithm still applies and the method falls
+    # back to `warning` whenever a rule cannot be resolved.
+    def effective_level(run : Run? = nil) : Level
+      if lvl = level
+        return lvl
+      end
+
+      if (k = kind) && k != ResultKind::Fail
+        return Level::None
+      end
+
+      if run && (rule = resolve_rule(run)) && (config = rule.default_configuration) && (rule_level = config.level)
+        return rule_level
+      end
+
+      Level::Warning
+    end
+
+    # Resolves the `ReportingDescriptor` associated with this result against the
+    # given run's `tool.driver.rules`, preferring `rule_index` then `rule_id`.
+    def resolve_rule(run : Run) : ReportingDescriptor?
+      rules = run.tool.driver.rules
+      return unless rules
+
+      if idx = rule_index
+        return rules[idx]? if idx >= 0
+      end
+
+      if rid = rule_id
+        return rules.find { |r| r.id == rid }
+      end
+
+      nil
     end
 
     def effective_kind : ResultKind
