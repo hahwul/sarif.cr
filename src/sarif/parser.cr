@@ -62,6 +62,8 @@ module Sarif
     raise ex
   rescue ex : JSON::ParseException | JSON::SerializableError
     raise Error.new("Failed to parse SARIF file '#{path}': #{ex.message}")
+  rescue ex : IO::Error
+    raise Error.new("Failed to read SARIF file '#{path}': #{ex.message}")
   end
 
   # Parses and validates a SARIF JSON string. Raises `ParseError` on validation failure.
