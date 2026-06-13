@@ -263,6 +263,18 @@ describe "Sarif.from_file with file errors" do
       tmp.delete
     end
   end
+
+  it "raises Sarif::Error (not a bare IO::Error) when path is a directory" do
+    dir = File.tempname("sarif_dir")
+    Dir.mkdir(dir)
+    begin
+      expect_raises(Sarif::Error, /Failed to read SARIF file/) do
+        Sarif.from_file(dir)
+      end
+    ensure
+      Dir.delete(dir)
+    end
+  end
 end
 
 describe "Sarif::Validator with array limits" do
