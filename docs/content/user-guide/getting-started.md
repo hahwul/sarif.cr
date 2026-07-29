@@ -8,7 +8,7 @@ This guide walks you through installing sarif.cr and creating your first SARIF d
 
 ## Prerequisites
 
-- [Crystal](https://crystal-lang.org/) >= 1.19.1
+- [Crystal](https://crystal-lang.org/) >= 1.21.0
 
 ## Installation
 
