@@ -1,44 +1,20 @@
 {% include "header.html" %}
-<header class="docs-header">
-  <a href="{{ base_url }}/" class="logo">sarif.cr Documentation</a>
-  <nav>
-    <a href="{{ base_url }}/user-guide/">User Guide</a>
-    <a href="{{ base_url }}/api-reference/">API Reference</a>
-  </nav>
-  <div class="header-right">
-    <a href="https://github.com/hahwul/sarif.cr" target="_blank">GitHub</a>
-  </div>
-</header>
+{% include "partials/nav.html" %}
+{% include "partials/search.html" %}
 <div class="docs-container">
-  <aside class="docs-sidebar">
-    <div class="sidebar-section">
-      <div class="sidebar-title">User Guide</div>
-      <ul class="sidebar-links">
-        <li><a href="{{ base_url }}/user-guide/getting-started/">Getting Started</a></li>
-        <li><a href="{{ base_url }}/user-guide/basic-usage/">Basic Usage</a></li>
-        <li><a href="{{ base_url }}/user-guide/builder/">Builder</a></li>
-        <li><a href="{{ base_url }}/user-guide/parsing-and-validation/">Parsing & Validation</a></li>
-      </ul>
-    </div>
-    <div class="sidebar-section">
-      <div class="sidebar-title">API Reference</div>
-      <ul class="sidebar-links">
-        <li><a href="{{ base_url }}/api-reference/sarif-log/">SarifLog</a></li>
-        <li><a href="{{ base_url }}/api-reference/run/">Run</a></li>
-        <li><a href="{{ base_url }}/api-reference/result/">Result</a></li>
-        <li><a href="{{ base_url }}/api-reference/tool/">Tool</a></li>
-        <li><a href="{{ base_url }}/api-reference/location/">Location</a></li>
-        <li><a href="{{ base_url }}/api-reference/enums/">Enums</a></li>
-      </ul>
-    </div>
-  </aside>
-  <main class="docs-main">
-    <h1>{{ page.title }}</h1>
+{% include "partials/sidebar.html" %}
+  <main id="main" class="docs-main">
+    {% if page.title is present %}<h1>{{ page.title | e }}</h1>{% endif %}
+    {% if page.description is present %}<p class="lede">{{ page.description | e }}</p>{% endif %}
     {{ content }}
-
-    <h2>In This Section</h2>
-    <ul class="section-list">
-      {{ section.list }}
-    </ul>
+    <h2 class="section-index-title">In This Section</h2>
+    <div class="section-cards">
+      {% for p in section.pages | sort(attribute="path") | sort(attribute="weight") %}{% if not p.is_index %}
+      <a class="section-card" href="{{ base_url }}{{ p.url }}">
+        <span class="section-card-title">{{ p.title | e }}</span>
+        {% if p.description is present %}<span class="section-card-desc">{{ p.description | e }}</span>{% endif %}
+      </a>
+      {% endif %}{% endfor %}
+    </div>
     {{ pagination }}
 {% include "footer.html" %}
