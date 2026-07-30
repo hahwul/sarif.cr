@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Read existing SARIF files and validate them against the specification.">
+  <title>Parsing &amp; Validation - sarif.cr</title>
+  <script>(function(){try{var t=localStorage.getItem("hwaro-theme");if(t==="light"||t==="dark"){document.documentElement.setAttribute("data-theme",t)}}catch(e){}})()</script>
+  <meta property="og:title" content="Parsing &amp; Validation">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://sarif.cr.hahwul.com/user-guide/parsing-and-validation/">
+  <meta property="og:description" content="Read existing SARIF files and validate them against the specification.">
+  <meta property="og:image" content="https://sarif.cr.hahwul.com/og-images/user-guide-parsing-and-validation.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Parsing &amp; Validation">
+  <meta name="twitter:description" content="Read existing SARIF files and validate them against the specification.">
+  <meta name="twitter:image" content="https://sarif.cr.hahwul.com/og-images/user-guide-parsing-and-validation.png">
+  <link rel="canonical" href="https://sarif.cr.hahwul.com/user-guide/parsing-and-validation/">
+  <link rel="stylesheet" href="https://sarif.cr.hahwul.com/css/style.css">
+  
+  <meta name="apple-mobile-web-app-title" content="sarif.cr">
+
+</head>
+<body data-section="user-guide">
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="docs-header">
+  <button class="nav-toggle" type="button" aria-label="Menu" aria-expanded="false" aria-controls="sidebar">
+    <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4.5h12M2 8h12M2 11.5h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+  </button>
+  <a href="https://sarif.cr.hahwul.com/" class="logo">sarif.cr <span>Documentation</span></a>
+  <nav class="header-nav" aria-label="Sections">
+    <a href="https://sarif.cr.hahwul.com/user-guide/" class="active">User Guide</a><a href="https://sarif.cr.hahwul.com/api-reference/">API Reference</a>
+  </nav>
+  <div class="header-right">
+    <button class="search-trigger" type="button" onclick="openSearch()" title="Search (⌘K)">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <span>Search</span>
+      <kbd>&#8984;K</kbd>
+    </button>
+    <button class="theme-toggle" type="button" data-mode="auto" aria-label="Theme: auto" title="Theme: auto">
+      <svg class="tt-auto" width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.75a6.25 6.25 0 0 1 0 12.5z" fill="currentColor"/></svg>
+      <svg class="tt-light" width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="3.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 .9v2M8 13.1v2M.9 8h2M13.1 8h2M2.98 2.98l1.42 1.42M11.6 11.6l1.42 1.42M13.02 2.98L11.6 4.4M4.4 11.6l-1.42 1.42" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      <svg class="tt-dark" width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.4 9.9A5.8 5.8 0 0 1 6.1 2.6a5.8 5.8 0 1 0 7.3 7.3z" fill="currentColor"/></svg>
+    </button>
+    <a class="gh-link" href="https://github.com/hahwul/sarif.cr" aria-label="GitHub repository">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
+    </a>
+  </div>
+</header>
+<div class="search-overlay" id="searchOverlay" onclick="if(event.target===this)closeSearch()">
+  <div class="search-modal">
+    <div class="search-input-wrap">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="search" id="searchInput" aria-label="Search" placeholder="Search documentation..." autocomplete="off">
+      <kbd onclick="closeSearch()">ESC</kbd>
+    </div>
+    <div class="search-results" id="searchResults"></div>
+  </div>
+</div>
+<div class="docs-container">
+<aside class="docs-sidebar" id="sidebar">
+
+  
+  <div class="sidebar-section">
+    <div class="sidebar-title">User Guide</div>
+    <ul class="sidebar-links">
+      <li><a href="https://sarif.cr.hahwul.com/user-guide/">Overview</a></li>
+      
+      <li><a href="https://sarif.cr.hahwul.com/user-guide/getting-started/">Getting Started</a></li>
+      
+      <li><a href="https://sarif.cr.hahwul.com/user-guide/basic-usage/">Basic Usage</a></li>
+      
+      <li><a href="https://sarif.cr.hahwul.com/user-guide/builder/">Builder</a></li>
+      
+      <li><a href="https://sarif.cr.hahwul.com/user-guide/parsing-and-validation/" class="active" aria-current="page">Parsing &amp; Validation</a></li>
+      
+    </ul>
+  </div>
+  
+  <div class="sidebar-section">
+    <div class="sidebar-title">API Reference</div>
+    <ul class="sidebar-links">
+      <li><a href="https://sarif.cr.hahwul.com/api-reference/">Overview</a></li>
+      
+      <li><a href="https://sarif.cr.hahwul.com/api-reference/sarif-log/">SarifLog</a></li>
+      
+      <li><a href="https://sarif.cr.hahwul.com/api-reference/run/">Run</a></li>
+      
+      <li><a href="https://sarif.cr.hahwul.com/api-reference/result/">Result</a></li>
+      
+      <li><a href="https://sarif.cr.hahwul.com/api-reference/tool/">Tool</a></li>
+      
+      <li><a href="https://sarif.cr.hahwul.com/api-reference/location/">Location</a></li>
+      
+      <li><a href="https://sarif.cr.hahwul.com/api-reference/enums/">Enums</a></li>
+      
+      <li><a href="https://sarif.cr.hahwul.com/api-reference/property-bag/">PropertyBag</a></li>
+      
+    </ul>
+  </div>
+  
+</aside>
+<div class="sidebar-scrim"></div>
+  <main id="main" class="docs-main">
+    <h1>Parsing &amp; Validation</h1>
+    <p class="lede">Read existing SARIF files and validate them against the specification.</p>
+    <p>sarif.cr can read existing SARIF JSON and validate documents against the specification.</p>
+<h2 id="parsing-sarif-json">Parsing SARIF JSON</h2>
+<p>Parse a JSON string into a <code>SarifLog</code>:</p>
+<pre><code class="language-crystal hljs">json <span class="hljs-operator">=</span> <span class="hljs-variable constant_">File</span>.read(<span class="hljs-string">&quot;</span><span class="hljs-string">results.sarif</span><span class="hljs-string">&quot;</span><span class="hljs-string"></span>)
+log <span class="hljs-operator">=</span> <span class="hljs-variable constant_">Sarif</span>.parse(json)
+
+log.runs.each <span class="hljs-keyword">do</span> <span class="hljs-operator">|</span>run<span class="hljs-operator">|</span>
+  puts <span class="hljs-string">&quot;</span><span class="hljs-string">Tool: </span><span class="hljs-subst">#{</span>run.tool.driver.name<span class="hljs-subst">}</span><span class="hljs-string">&quot;</span><span class="hljs-string"></span>
+  run.results.try <span class="hljs-operator">&amp;</span>.each <span class="hljs-keyword">do</span> <span class="hljs-operator">|</span>result<span class="hljs-operator">|</span>
+    puts <span class="hljs-string">&quot;</span><span class="hljs-string">  </span><span class="hljs-subst">#{</span>result.level<span class="hljs-subst">}</span><span class="hljs-string">: </span><span class="hljs-subst">#{</span>result.message.text<span class="hljs-subst">}</span><span class="hljs-string">&quot;</span><span class="hljs-string"></span>
+  <span class="hljs-keyword">end</span>
+<span class="hljs-keyword">end</span>
+</code></pre>
+<h2 id="reading-from-a-file">Reading from a File</h2>
+<p>Use the convenience method to read and parse in one step:</p>
+<pre><code class="language-crystal hljs">log <span class="hljs-operator">=</span> <span class="hljs-variable constant_">Sarif</span>.from_file(<span class="hljs-string">&quot;</span><span class="hljs-string">results.sarif</span><span class="hljs-string">&quot;</span><span class="hljs-string"></span>)
+</code></pre>
+<h2 id="parsing-with-validation">Parsing with Validation</h2>
+<p>Use <code>parse!</code> or <code>from_file!</code> to parse and validate in one step. These raise an exception if validation fails:</p>
+<pre><code class="language-crystal hljs"><span class="hljs-keyword">begin</span>
+  log <span class="hljs-operator">=</span> <span class="hljs-variable constant_">Sarif</span>.parse!(json)
+<span class="hljs-keyword">rescue</span> ex
+  puts <span class="hljs-string">&quot;</span><span class="hljs-string">Invalid SARIF: </span><span class="hljs-subst">#{</span>ex.message<span class="hljs-subst">}</span><span class="hljs-string">&quot;</span><span class="hljs-string"></span>
+<span class="hljs-keyword">end</span>
+</code></pre>
+<pre><code class="language-crystal hljs"><span class="hljs-keyword">begin</span>
+  log <span class="hljs-operator">=</span> <span class="hljs-variable constant_">Sarif</span>.from_file!(<span class="hljs-string">&quot;</span><span class="hljs-string">results.sarif</span><span class="hljs-string">&quot;</span><span class="hljs-string"></span>)
+<span class="hljs-keyword">rescue</span> ex
+  puts <span class="hljs-string">&quot;</span><span class="hljs-string">Invalid SARIF: </span><span class="hljs-subst">#{</span>ex.message<span class="hljs-subst">}</span><span class="hljs-string">&quot;</span><span class="hljs-string"></span>
+<span class="hljs-keyword">end</span>
+</code></pre>
+<h2 id="manual-validation">Manual Validation</h2>
+<p>Run validation separately using <code>Sarif::Validator</code>:</p>
+<pre><code class="language-crystal hljs">log <span class="hljs-operator">=</span> <span class="hljs-variable constant_">Sarif</span>.parse(json)
+result <span class="hljs-operator">=</span> <span class="hljs-variable constant_">Sarif</span><span class="hljs-variable constant_">::</span><span class="hljs-variable constant_">Validator</span>.new.validate(log)
+
+<span class="hljs-keyword">if</span> result.valid?
+  puts <span class="hljs-string">&quot;</span><span class="hljs-string">Valid SARIF document</span><span class="hljs-string">&quot;</span><span class="hljs-string"></span>
+<span class="hljs-keyword">else</span>
+  result.errors.each <span class="hljs-keyword">do</span> <span class="hljs-operator">|</span>error<span class="hljs-operator">|</span>
+    puts <span class="hljs-string">&quot;</span><span class="hljs-subst">#{</span>error.path<span class="hljs-subst">}</span><span class="hljs-string">: </span><span class="hljs-subst">#{</span>error.message<span class="hljs-subst">}</span><span class="hljs-string">&quot;</span><span class="hljs-string"></span>
+  <span class="hljs-keyword">end</span>
+<span class="hljs-keyword">end</span>
+</code></pre>
+<h2 id="validator-options">Validator Options</h2>
+<p>The validator accepts options to prevent resource exhaustion (DoS protection):</p>
+<pre><code class="language-crystal hljs">validator <span class="hljs-operator">=</span> <span class="hljs-variable constant_">Sarif</span><span class="hljs-variable constant_">::</span><span class="hljs-variable constant_">Validator</span>.new(
+  max_runs: <span class="hljs-number">10</span>,       <span class="hljs-comment"># maximum number of runs allowed</span>
+  max_results: <span class="hljs-number">5000</span>,  <span class="hljs-comment"># maximum results per run</span>
+  max_depth: <span class="hljs-number">50</span>       <span class="hljs-comment"># maximum nesting depth (default: 100)</span>
+)
+
+result <span class="hljs-operator">=</span> validator.validate(log)
+</code></pre>
+<p>The parser also supports a <code>max_size</code> option to reject oversized inputs before JSON parsing:</p>
+<pre><code class="language-crystal hljs">log <span class="hljs-operator">=</span> <span class="hljs-variable constant_">Sarif</span>.parse(json, max_size: <span class="hljs-number">10_000_000</span>)          <span class="hljs-comment"># 10 MB limit</span>
+log <span class="hljs-operator">=</span> <span class="hljs-variable constant_">Sarif</span>.from_file(<span class="hljs-string">&quot;</span><span class="hljs-string">results.sarif</span><span class="hljs-string">&quot;</span><span class="hljs-string"></span>, max_size: <span class="hljs-number">10_000_000</span>)
+</code></pre>
+<h2 id="validation-checks">Validation Checks</h2>
+<p>The validator checks for:</p>
+<ul>
+<li><strong>Version</strong> -- Must be <code>&quot;2.1.0&quot;</code></li>
+<li><strong>Tool driver name</strong> -- Must not be empty</li>
+<li><strong>Result message</strong> -- Must have either <code>text</code> or <code>id</code></li>
+<li><strong>Rule index</strong> -- <code>ruleIndex</code> must reference a valid rule in the driver</li>
+<li><strong>Rule ID consistency</strong> -- <code>ruleId</code> must match the rule at <code>ruleIndex</code></li>
+<li><strong>GUID format</strong> -- Must be valid UUID</li>
+<li><strong>Timestamp format</strong> -- Must be RFC 3339</li>
+<li><strong>URI format</strong> -- Must be absolute URI</li>
+<li><strong>Result rank</strong> -- Must be 0.0–100.0</li>
+<li><strong>Occurrence count</strong> -- Must be &gt;= 1</li>
+<li><strong>Code flow</strong> -- Must have at least one thread flow</li>
+<li><strong>Thread flow</strong> -- Must have at least one location</li>
+<li><strong>Fix</strong> -- Must have at least one artifact change</li>
+<li><strong>Artifact change</strong> -- Must have at least one replacement</li>
+<li><strong>Artifact length</strong> -- Must be &gt;= -1</li>
+<li><strong>Invocation time</strong> -- <code>endTimeUtc</code> must be &gt;= <code>startTimeUtc</code></li>
+<li><strong>Nesting depth</strong> -- Must not exceed <code>max_depth</code></li>
+</ul>
+<h2 id="working-with-parsed-data">Working with Parsed Data</h2>
+<p>After parsing, you can navigate the full object graph:</p>
+<pre><code class="language-crystal hljs">log <span class="hljs-operator">=</span> <span class="hljs-variable constant_">Sarif</span>.from_file(<span class="hljs-string">&quot;</span><span class="hljs-string">eslint-results.sarif</span><span class="hljs-string">&quot;</span><span class="hljs-string"></span>)
+run <span class="hljs-operator">=</span> log.runs[<span class="hljs-number">0</span>]
+
+<span class="hljs-comment"># Access tool info</span>
+puts run.tool.driver.name      <span class="hljs-comment"># =&gt; &quot;ESLint&quot;</span>
+puts run.tool.driver.version   <span class="hljs-comment"># =&gt; &quot;8.0.0&quot;</span>
+
+<span class="hljs-comment"># Access rules</span>
+run.tool.driver.rules.try <span class="hljs-operator">&amp;</span>.each <span class="hljs-keyword">do</span> <span class="hljs-operator">|</span>rule<span class="hljs-operator">|</span>
+  puts <span class="hljs-string">&quot;</span><span class="hljs-subst">#{</span>rule.id<span class="hljs-subst">}</span><span class="hljs-string">: </span><span class="hljs-subst">#{</span>rule.short_description.try <span class="hljs-operator">&amp;</span>.text<span class="hljs-subst">}</span><span class="hljs-string">&quot;</span><span class="hljs-string"></span>
+<span class="hljs-keyword">end</span>
+
+<span class="hljs-comment"># Access results</span>
+run.results.try <span class="hljs-operator">&amp;</span>.each <span class="hljs-keyword">do</span> <span class="hljs-operator">|</span>result<span class="hljs-operator">|</span>
+  loc <span class="hljs-operator">=</span> result.locations.try <span class="hljs-operator">&amp;</span>.[<span class="hljs-number">0</span>]?
+  <span class="hljs-keyword">if</span> phys <span class="hljs-operator">=</span> loc.try <span class="hljs-operator">&amp;</span>.physical_location
+    uri <span class="hljs-operator">=</span> phys.artifact_location.try <span class="hljs-operator">&amp;</span>.uri
+    line <span class="hljs-operator">=</span> phys.region.try <span class="hljs-operator">&amp;</span>.start_line
+    puts <span class="hljs-string">&quot;</span><span class="hljs-subst">#{</span>uri<span class="hljs-subst">}</span><span class="hljs-string">:</span><span class="hljs-subst">#{</span>line<span class="hljs-subst">}</span><span class="hljs-string"> - </span><span class="hljs-subst">#{</span>result.message.text<span class="hljs-subst">}</span><span class="hljs-string">&quot;</span><span class="hljs-string"></span>
+  <span class="hljs-keyword">end</span>
+<span class="hljs-keyword">end</span>
+</code></pre>
+<h2 id="lightweight-validation">Lightweight Validation</h2>
+<p>Each core model provides a <code>valid?</code> method for quick structural checks without the full Validator:</p>
+<pre><code class="language-crystal hljs">message <span class="hljs-operator">=</span> <span class="hljs-variable constant_">Sarif</span><span class="hljs-variable constant_">::</span><span class="hljs-variable constant_">Message</span>.new(text: <span class="hljs-string">&quot;</span><span class="hljs-string">Issue found</span><span class="hljs-string">&quot;</span><span class="hljs-string"></span>)
+message.valid?  <span class="hljs-comment"># =&gt; true (has text)</span>
+
+result <span class="hljs-operator">=</span> <span class="hljs-variable constant_">Sarif</span><span class="hljs-variable constant_">::</span><span class="hljs-variable constant_">Result</span>.new(message: message)
+result.valid?   <span class="hljs-comment"># =&gt; true (checks message, rank 0-100, occurrence_count &gt;= 1)</span>
+
+run <span class="hljs-operator">=</span> <span class="hljs-variable constant_">Sarif</span><span class="hljs-variable constant_">::</span><span class="hljs-variable constant_">Run</span>.new(tool: <span class="hljs-variable constant_">Sarif</span><span class="hljs-variable constant_">::</span><span class="hljs-variable constant_">Tool</span>.new(driver: driver))
+run.valid?      <span class="hljs-comment"># =&gt; true (checks driver name and all results)</span>
+
+log <span class="hljs-operator">=</span> <span class="hljs-variable constant_">Sarif</span><span class="hljs-variable constant_">::</span><span class="hljs-variable constant_">SarifLog</span>.new(runs: [run])
+log.valid?      <span class="hljs-comment"># =&gt; true (checks version &quot;2.1.0&quot; and all runs)</span>
+</code></pre>
+<h2 id="error-types">Error Types</h2>
+<p>sarif.cr defines structured error types for different failure scenarios:</p>
+<table>
+<thead>
+<tr>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Sarif::Error</code></td>
+<td>Base exception class</td>
+</tr>
+<tr>
+<td><code>Sarif::ValidationError</code></td>
+<td>A single validation error with a JSONPath-like <code>path</code></td>
+</tr>
+<tr>
+<td><code>Sarif::ParseError</code></td>
+<td>Raised by <code>parse!</code> / <code>from_file!</code> when validation fails</td>
+</tr>
+<tr>
+<td><code>Sarif::ValidationResult</code></td>
+<td>Result object with <code>valid?</code> and <code>errors</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="handling-parse-errors">Handling Parse Errors</h3>
+<pre><code class="language-crystal hljs"><span class="hljs-keyword">begin</span>
+  log <span class="hljs-operator">=</span> <span class="hljs-variable constant_">Sarif</span>.parse!(json)
+<span class="hljs-keyword">rescue</span> ex : <span class="hljs-variable constant_">Sarif</span><span class="hljs-variable constant_">::</span><span class="hljs-variable constant_">ParseError</span>
+  ex.validation_errors.each <span class="hljs-keyword">do</span> <span class="hljs-operator">|</span>error<span class="hljs-operator">|</span>
+    puts <span class="hljs-string">&quot;</span><span class="hljs-subst">#{</span>error.path<span class="hljs-subst">}</span><span class="hljs-string">: </span><span class="hljs-subst">#{</span>error.message<span class="hljs-subst">}</span><span class="hljs-string">&quot;</span><span class="hljs-string"></span>
+    <span class="hljs-comment"># $.version: Unsupported SARIF version: 1.0. Expected 2.1.0</span>
+    <span class="hljs-comment"># $.runs[0].tool.driver.name: Tool driver name must not be empty</span>
+  <span class="hljs-keyword">end</span>
+<span class="hljs-keyword">rescue</span> ex : <span class="hljs-variable constant_">JSON</span><span class="hljs-variable constant_">::</span><span class="hljs-variable constant_">ParseException</span>
+  puts <span class="hljs-string">&quot;</span><span class="hljs-string">Malformed JSON: </span><span class="hljs-subst">#{</span>ex.message<span class="hljs-subst">}</span><span class="hljs-string">&quot;</span><span class="hljs-string"></span>
+<span class="hljs-keyword">end</span>
+</code></pre>
+<h3 id="working-with-validation-results">Working with Validation Results</h3>
+<pre><code class="language-crystal hljs">result <span class="hljs-operator">=</span> <span class="hljs-variable constant_">Sarif</span><span class="hljs-variable constant_">::</span><span class="hljs-variable constant_">Validator</span>.new.validate(log)
+
+<span class="hljs-keyword">unless</span> result.valid?
+  result.errors.each <span class="hljs-keyword">do</span> <span class="hljs-operator">|</span>error<span class="hljs-operator">|</span>
+    puts <span class="hljs-string">&quot;</span><span class="hljs-subst">#{</span>error.path<span class="hljs-subst">}</span><span class="hljs-string">: </span><span class="hljs-subst">#{</span>error.message<span class="hljs-subst">}</span><span class="hljs-string">&quot;</span><span class="hljs-string"></span>
+  <span class="hljs-keyword">end</span>
+<span class="hljs-keyword">end</span>
+</code></pre>
+
+    
+    <nav class="page-nav" aria-label="Adjacent pages">
+      
+      <a class="page-nav-link page-nav-prev" href="https://sarif.cr.hahwul.com/user-guide/builder/" rel="prev">
+        <span class="page-nav-label">Previous</span>
+        <span class="page-nav-title">Builder</span>
+      </a>
+      
+      
+      <a class="page-nav-link page-nav-next" href="https://sarif.cr.hahwul.com/api-reference/" rel="next">
+        <span class="page-nav-label">Next</span>
+        <span class="page-nav-title">API Reference</span>
+      </a>
+      
+    </nav>
+    
+    <div class="docs-footer">
+      <p>sarif.cr documentation</p>
+      <div class="docs-footer-links">
+        <a href="https://github.com/hahwul/sarif.cr">GitHub</a>
+        <a href="https://github.com/hahwul/hwaro">Built with Hwaro</a>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script src="https://sarif.cr.hahwul.com/js/search.js"></script>
+<script>
+(function () {
+  var KEY = "hwaro-theme";
+  var MODES = ["auto", "light", "dark"];
+  var root = document.documentElement;
+  var btn = document.querySelector(".theme-toggle");
+  if (!btn) return;
+  function apply(mode) {
+    if (mode === "auto") {
+      root.removeAttribute("data-theme");
+      try { localStorage.removeItem(KEY); } catch (e) {}
+    } else {
+      root.setAttribute("data-theme", mode);
+      try { localStorage.setItem(KEY, mode); } catch (e) {}
+    }
+    btn.setAttribute("data-mode", mode);
+    btn.setAttribute("aria-label", "Theme: " + mode);
+    btn.title = "Theme: " + mode;
+  }
+  var stored = "auto";
+  try { var t = localStorage.getItem(KEY); if (t === "light" || t === "dark") stored = t; } catch (e) {}
+  btn.addEventListener("click", function () {
+    apply(MODES[(MODES.indexOf(btn.getAttribute("data-mode")) + 1) % MODES.length]);
+  });
+  apply(stored);
+})();
+(function () {
+  var btn = document.querySelector(".nav-toggle");
+  var scrim = document.querySelector(".sidebar-scrim");
+  var sidebar = document.getElementById("sidebar");
+  if (!btn) return;
+  function set(open) {
+    document.body.classList.toggle("nav-open", open);
+    btn.setAttribute("aria-expanded", open ? "true" : "false");
+  }
+  btn.addEventListener("click", function () {
+    set(!document.body.classList.contains("nav-open"));
+  });
+  if (scrim) scrim.addEventListener("click", function () { set(false); });
+  if (sidebar) sidebar.addEventListener("click", function (e) {
+    if (e.target.closest("a")) set(false);
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") set(false);
+  });
+})();
+</script>
+
+</body>
+</html>

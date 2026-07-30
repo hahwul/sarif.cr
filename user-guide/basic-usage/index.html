@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Create and manipulate SARIF objects directly using the Crystal type system.">
+  <title>Basic Usage - sarif.cr</title>
+  <script>(function(){try{var t=localStorage.getItem("hwaro-theme");if(t==="light"||t==="dark"){document.documentElement.setAttribute("data-theme",t)}}catch(e){}})()</script>
+  <meta property="og:title" content="Basic Usage">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://sarif.cr.hahwul.com/user-guide/basic-usage/">
+  <meta property="og:description" content="Create and manipulate SARIF objects directly using the Crystal type system.">
+  <meta property="og:image" content="https://sarif.cr.hahwul.com/og-images/user-guide-basic-usage.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Basic Usage">
+  <meta name="twitter:description" content="Create and manipulate SARIF objects directly using the Crystal type system.">
+  <meta name="twitter:image" content="https://sarif.cr.hahwul.com/og-images/user-guide-basic-usage.png">
+  <link rel="canonical" href="https://sarif.cr.hahwul.com/user-guide/basic-usage/">
+  <link rel="stylesheet" href="https://sarif.cr.hahwul.com/css/style.css">
+  
+  <meta name="apple-mobile-web-app-title" content="sarif.cr">
+
+</head>
+<body data-section="user-guide">
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="docs-header">
+  <button class="nav-toggle" type="button" aria-label="Menu" aria-expanded="false" aria-controls="sidebar">
+    <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4.5h12M2 8h12M2 11.5h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+  </button>
+  <a href="https://sarif.cr.hahwul.com/" class="logo">sarif.cr <span>Documentation</span></a>
+  <nav class="header-nav" aria-label="Sections">
+    <a href="https://sarif.cr.hahwul.com/user-guide/" class="active">User Guide</a><a href="https://sarif.cr.hahwul.com/api-reference/">API Reference</a>
+  </nav>
+  <div class="header-right">
+    <button class="search-trigger" type="button" onclick="openSearch()" title="Search (⌘K)">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <span>Search</span>
+      <kbd>&#8984;K</kbd>
+    </button>
+    <button class="theme-toggle" type="button" data-mode="auto" aria-label="Theme: auto" title="Theme: auto">
+      <svg class="tt-auto" width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.75a6.25 6.25 0 0 1 0 12.5z" fill="currentColor"/></svg>
+      <svg class="tt-light" width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="3.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 .9v2M8 13.1v2M.9 8h2M13.1 8h2M2.98 2.98l1.42 1.42M11.6 11.6l1.42 1.42M13.02 2.98L11.6 4.4M4.4 11.6l-1.42 1.42" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      <svg class="tt-dark" width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.4 9.9A5.8 5.8 0 0 1 6.1 2.6a5.8 5.8 0 1 0 7.3 7.3z" fill="currentColor"/></svg>
+    </button>
+    <a class="gh-link" href="https://github.com/hahwul/sarif.cr" aria-label="GitHub repository">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
+    </a>
+  </div>
+</header>
+<div class="search-overlay" id="searchOverlay" onclick="if(event.target===this)closeSearch()">
+  <div class="search-modal">
+    <div class="search-input-wrap">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="search" id="searchInput" aria-label="Search" placeholder="Search documentation..." autocomplete="off">
+      <kbd onclick="closeSearch()">ESC</kbd>
+    </div>
+    <div class="search-results" id="searchResults"></div>
+  </div>
+</div>
+<div class="docs-container">
+<aside class="docs-sidebar" id="sidebar">
+
+  
+  <div class="sidebar-section">
+    <div class="sidebar-title">User Guide</div>
+    <ul class="sidebar-links">
+      <li><a href="https://sarif.cr.hahwul.com/user-guide/">Overview</a></li>
+      
+      <li><a href="https://sarif.cr.hahwul.com/user-guide/getting-started/">Getting Started</a></li>
+      
+      <li><a href="https://sarif.cr.hahwul.com/user-guide/basic-usage/" class="active" aria-current="page">Basic Usage</a></li>
+      
+      <li><a href="https://sarif.cr.hahwul.com/user-guide/builder/">Builder</a></li>
+      
+      <li><a href="https://sarif.cr.hahwul.com/user-guide/parsing-and-validation/">Parsing &amp; Validation</a></li>
+      
+    </ul>
+  </div>
+  
+  <div class="sidebar-section">
+    <div class="sidebar-title">API Reference</div>
+    <ul class="sidebar-links">
+      <li><a href="https://sarif.cr.hahwul.com/api-reference/">Overview</a></li>
+      
+      <li><a href="https://sarif.cr.hahwul.com/api-reference/sarif-log/">SarifLog</a></li>
+      
+      <li><a href="https://sarif.cr.hahwul.com/api-reference/run/">Run</a></li>
+      
+      <li><a href="https://sarif.cr.hahwul.com/api-reference/result/">Result</a></li>
+      
+      <li><a href="https://sarif.cr.hahwul.com/api-reference/tool/">Tool</a></li>
+      
+      <li><a href="https://sarif.cr.hahwul.com/api-reference/location/">Location</a></li>
+      
+      <li><a href="https://sarif.cr.hahwul.com/api-reference/enums/">Enums</a></li>
+      
+      <li><a href="https://sarif.cr.hahwul.com/api-reference/property-bag/">PropertyBag</a></li>
+      
+    </ul>
+  </div>
+  
+</aside>
+<div class="sidebar-scrim"></div>
+  <main id="main" class="docs-main">
+    <h1>Basic Usage</h1>
+    <p class="lede">Create and manipulate SARIF objects directly using the Crystal type system.</p>
+    <p>This guide covers working with SARIF objects directly. Each SARIF type maps to a Crystal class with typed properties and JSON serialization.</p>
+<h2 id="creating-results">Creating Results</h2>
+<p>A <code>Result</code> is the core finding object. At minimum, it requires a <code>Message</code>:</p>
+<pre><code class="language-crystal hljs">result <span class="hljs-operator">=</span> <span class="hljs-variable constant_">Sarif</span><span class="hljs-variable constant_">::</span><span class="hljs-variable constant_">Result</span>.new(
+  message: <span class="hljs-variable constant_">Sarif</span><span class="hljs-variable constant_">::</span><span class="hljs-variable constant_">Message</span>.new(text: <span class="hljs-string">&quot;</span><span class="hljs-string">Unused variable &#39;x&#39;</span><span class="hljs-string">&quot;</span><span class="hljs-string"></span>)
+)
+</code></pre>
+<p>Add a rule reference and severity:</p>
+<pre><code class="language-crystal hljs">result <span class="hljs-operator">=</span> <span class="hljs-variable constant_">Sarif</span><span class="hljs-variable constant_">::</span><span class="hljs-variable constant_">Result</span>.new(
+  message: <span class="hljs-variable constant_">Sarif</span><span class="hljs-variable constant_">::</span><span class="hljs-variable constant_">Message</span>.new(text: <span class="hljs-string">&quot;</span><span class="hljs-string">Unused variable &#39;x&#39;</span><span class="hljs-string">&quot;</span><span class="hljs-string"></span>),
+  rule_id: <span class="hljs-string">&quot;</span><span class="hljs-string">LINT001</span><span class="hljs-string">&quot;</span><span class="hljs-string"></span>,
+  level: <span class="hljs-variable constant_">Sarif</span><span class="hljs-variable constant_">::</span><span class="hljs-variable constant_">Level</span><span class="hljs-variable constant_">::</span><span class="hljs-variable constant_">Warning</span>
+)
+</code></pre>
+<h2 id="adding-locations">Adding Locations</h2>
+<p>Specify where the issue was found:</p>
+<pre><code class="language-crystal hljs">result <span class="hljs-operator">=</span> <span class="hljs-variable constant_">Sarif</span><span class="hljs-variable constant_">::</span><span class="hljs-variable constant_">Result</span>.new(
+  message: <span class="hljs-variable constant_">Sarif</span><span class="hljs-variable constant_">::</span><span class="hljs-variable constant_">Message</span>.new(text: <span class="hljs-string">&quot;</span><span class="hljs-string">SQL injection risk</span><span class="hljs-string">&quot;</span><span class="hljs-string"></span>),
+  rule_id: <span class="hljs-string">&quot;</span><span class="hljs-string">SEC001</span><span class="hljs-string">&quot;</span><span class="hljs-string"></span>,
+  level: <span class="hljs-variable constant_">Sarif</span><span class="hljs-variable constant_">::</span><span class="hljs-variable constant_">Level</span><span class="hljs-variable constant_">::</span><span class="hljs-variable constant_">Error</span>,
+  locations: [
+    <span class="hljs-variable constant_">Sarif</span><span class="hljs-variable constant_">::</span><span class="hljs-variable constant_">Location</span>.new(
+      physical_location: <span class="hljs-variable constant_">Sarif</span><span class="hljs-variable constant_">::</span><span class="hljs-variable constant_">PhysicalLocation</span>.new(
+        artifact_location: <span class="hljs-variable constant_">Sarif</span><span class="hljs-variable constant_">::</span><span class="hljs-variable constant_">ArtifactLocation</span>.new(
+          uri: <span class="hljs-string">&quot;</span><span class="hljs-string">src/controllers/user_controller.cr</span><span class="hljs-string">&quot;</span><span class="hljs-string"></span>,
+          uri_base_id: <span class="hljs-string">&quot;</span><span class="hljs-string">%SRCROOT%</span><span class="hljs-string">&quot;</span><span class="hljs-string"></span>
+        ),
+        region: <span class="hljs-variable constant_">Sarif</span><span class="hljs-variable constant_">::</span><span class="hljs-variable constant_">Region</span>.new(
+          start_line: <span class="hljs-number">42</span>,
+          start_column: <span class="hljs-number">10</span>,
+          end_line: <span class="hljs-number">42</span>,
+          end_column: <span class="hljs-number">55</span>
+        )
+      )
+    ),
+  ]
+)
+</code></pre>
+<h2 id="defining-rules">Defining Rules</h2>
+<p>Rules are defined on the tool's driver component:</p>
+<pre><code class="language-crystal hljs">driver <span class="hljs-operator">=</span> <span class="hljs-variable constant_">Sarif</span><span class="hljs-variable constant_">::</span><span class="hljs-variable constant_">ToolComponent</span>.new(
+  name: <span class="hljs-string">&quot;</span><span class="hljs-string">SecurityScanner</span><span class="hljs-string">&quot;</span><span class="hljs-string"></span>,
+  version: <span class="hljs-string">&quot;</span><span class="hljs-string">2.0.0</span><span class="hljs-string">&quot;</span><span class="hljs-string"></span>,
+  rules: [
+    <span class="hljs-variable constant_">Sarif</span><span class="hljs-variable constant_">::</span><span class="hljs-variable constant_">ReportingDescriptor</span>.new(
+      id: <span class="hljs-string">&quot;</span><span class="hljs-string">SEC001</span><span class="hljs-string">&quot;</span><span class="hljs-string"></span>,
+      name: <span class="hljs-string">&quot;</span><span class="hljs-string">SqlInjection</span><span class="hljs-string">&quot;</span><span class="hljs-string"></span>,
+      short_description: <span class="hljs-variable constant_">Sarif</span><span class="hljs-variable constant_">::</span><span class="hljs-variable constant_">MultiformatMessageString</span>.new(
+        text: <span class="hljs-string">&quot;</span><span class="hljs-string">SQL Injection vulnerability</span><span class="hljs-string">&quot;</span><span class="hljs-string"></span>
+      ),
+      help_uri: <span class="hljs-string">&quot;</span><span class="hljs-string">https://example.com/rules/SEC001</span><span class="hljs-string">&quot;</span><span class="hljs-string"></span>,
+      default_configuration: <span class="hljs-variable constant_">Sarif</span><span class="hljs-variable constant_">::</span><span class="hljs-variable constant_">ReportingConfiguration</span>.new(
+        level: <span class="hljs-variable constant_">Sarif</span><span class="hljs-variable constant_">::</span><span class="hljs-variable constant_">Level</span><span class="hljs-variable constant_">::</span><span class="hljs-variable constant_">Error</span>
+      )
+    ),
+  ]
+)
+</code></pre>
+<h2 id="assembling-a-complete-document">Assembling a Complete Document</h2>
+<p>Combine tool, results, and other metadata into a <code>SarifLog</code>:</p>
+<pre><code class="language-crystal hljs">log <span class="hljs-operator">=</span> <span class="hljs-variable constant_">Sarif</span><span class="hljs-variable constant_">::</span><span class="hljs-variable constant_">SarifLog</span>.new(
+  runs: [
+    <span class="hljs-variable constant_">Sarif</span><span class="hljs-variable constant_">::</span><span class="hljs-variable constant_">Run</span>.new(
+      tool: <span class="hljs-variable constant_">Sarif</span><span class="hljs-variable constant_">::</span><span class="hljs-variable constant_">Tool</span>.new(driver: driver),
+      results: [result],
+      artifacts: [
+        <span class="hljs-variable constant_">Sarif</span><span class="hljs-variable constant_">::</span><span class="hljs-variable constant_">Artifact</span>.new(
+          location: <span class="hljs-variable constant_">Sarif</span><span class="hljs-variable constant_">::</span><span class="hljs-variable constant_">ArtifactLocation</span>.new(uri: <span class="hljs-string">&quot;</span><span class="hljs-string">src/controllers/user_controller.cr</span><span class="hljs-string">&quot;</span><span class="hljs-string"></span>),
+          mime_type: <span class="hljs-string">&quot;</span><span class="hljs-string">text/x-crystal</span><span class="hljs-string">&quot;</span><span class="hljs-string"></span>,
+          roles: [<span class="hljs-variable constant_">Sarif</span><span class="hljs-variable constant_">::</span><span class="hljs-variable constant_">ArtifactRole</span><span class="hljs-variable constant_">::</span><span class="hljs-variable constant_">AnalysisTarget</span>]
+        ),
+      ],
+      column_kind: <span class="hljs-variable constant_">Sarif</span><span class="hljs-variable constant_">::</span><span class="hljs-variable constant_">ColumnKind</span><span class="hljs-variable constant_">::</span><span class="hljs-variable constant_">Utf16CodeUnits</span>
+    ),
+  ]
+)
+</code></pre>
+<h2 id="json-output">JSON Output</h2>
+<p>All SARIF types support <code>to_json</code> and <code>to_pretty_json</code>:</p>
+<pre><code class="language-crystal hljs">puts log.to_json          <span class="hljs-comment"># compact JSON</span>
+puts log.to_pretty_json   <span class="hljs-comment"># indented JSON</span>
+</code></pre>
+<p>Crystal's snake_case properties are automatically mapped to SARIF's camelCase keys. For example, <code>start_line</code> becomes <code>startLine</code> and <code>rule_id</code> becomes <code>ruleId</code>.</p>
+<h2 id="default-values">Default Values</h2>
+<p>SARIF defines default values for some fields. sarif.cr keeps these as <code>nil</code> and provides <code>effective_*</code> methods:</p>
+<pre><code class="language-crystal hljs">result <span class="hljs-operator">=</span> <span class="hljs-variable constant_">Sarif</span><span class="hljs-variable constant_">::</span><span class="hljs-variable constant_">Result</span>.new(message: <span class="hljs-variable constant_">Sarif</span><span class="hljs-variable constant_">::</span><span class="hljs-variable constant_">Message</span>.new(text: <span class="hljs-string">&quot;</span><span class="hljs-string">test</span><span class="hljs-string">&quot;</span><span class="hljs-string"></span>))
+
+result.level              <span class="hljs-comment"># =&gt; nil</span>
+result.effective_level    <span class="hljs-comment"># =&gt; Sarif::Level::Warning (SARIF default)</span>
+
+result.kind               <span class="hljs-comment"># =&gt; nil</span>
+result.effective_kind     <span class="hljs-comment"># =&gt; Sarif::ResultKind::Fail (SARIF default)</span>
+</code></pre>
+<h2 id="querying-results">Querying Results</h2>
+<p><code>SarifLog</code> and <code>Run</code> provide helpers to filter and aggregate results without manual iteration.</p>
+<h3 id="filtering">Filtering</h3>
+<pre><code class="language-crystal hljs">log <span class="hljs-operator">=</span> <span class="hljs-variable constant_">Sarif</span>.from_file(<span class="hljs-string">&quot;</span><span class="hljs-string">results.sarif</span><span class="hljs-string">&quot;</span><span class="hljs-string"></span>)
+
+<span class="hljs-comment"># Filter by level</span>
+errors <span class="hljs-operator">=</span> log.find_results(level: <span class="hljs-variable constant_">Sarif</span><span class="hljs-variable constant_">::</span><span class="hljs-variable constant_">Level</span><span class="hljs-variable constant_">::</span><span class="hljs-variable constant_">Error</span>)
+
+<span class="hljs-comment"># Filter by rule ID</span>
+rule_results <span class="hljs-operator">=</span> log.find_results(rule_id: <span class="hljs-string">&quot;</span><span class="hljs-string">SEC001</span><span class="hljs-string">&quot;</span><span class="hljs-string"></span>)
+
+<span class="hljs-comment"># Combine criteria (AND logic)</span>
+critical <span class="hljs-operator">=</span> log.find_results(rule_id: <span class="hljs-string">&quot;</span><span class="hljs-string">SEC001</span><span class="hljs-string">&quot;</span><span class="hljs-string"></span>, level: <span class="hljs-variable constant_">Sarif</span><span class="hljs-variable constant_">::</span><span class="hljs-variable constant_">Level</span><span class="hljs-variable constant_">::</span><span class="hljs-variable constant_">Error</span>)
+
+<span class="hljs-comment"># Filter by kind</span>
+open_issues <span class="hljs-operator">=</span> log.find_results(kind: <span class="hljs-variable constant_">Sarif</span><span class="hljs-variable constant_">::</span><span class="hljs-variable constant_">ResultKind</span><span class="hljs-variable constant_">::</span><span class="hljs-variable constant_">Open</span>)
+</code></pre>
+<p>The same methods are available on individual <code>Run</code> objects:</p>
+<pre><code class="language-crystal hljs">run <span class="hljs-operator">=</span> log.runs[<span class="hljs-number">0</span>]
+warnings <span class="hljs-operator">=</span> run.find_results(level: <span class="hljs-variable constant_">Sarif</span><span class="hljs-variable constant_">::</span><span class="hljs-variable constant_">Level</span><span class="hljs-variable constant_">::</span><span class="hljs-variable constant_">Warning</span>)
+</code></pre>
+<h3 id="aggregation">Aggregation</h3>
+<pre><code class="language-crystal hljs"><span class="hljs-comment"># Count results by severity</span>
+log.result_counts_by_level
+<span class="hljs-comment"># =&gt; {Sarif::Level::Warning =&gt; 5, Sarif::Level::Error =&gt; 2}</span>
+
+<span class="hljs-comment"># Count results by rule</span>
+log.result_counts_by_rule_id
+<span class="hljs-comment"># =&gt; {&quot;SEC001&quot; =&gt; 3, &quot;SEC002&quot; =&gt; 4}</span>
+</code></pre>
+<h3 id="location-search">Location Search</h3>
+<pre><code class="language-crystal hljs"><span class="hljs-comment"># Find all locations referencing a specific file</span>
+locations <span class="hljs-operator">=</span> log.find_locations_in_file(<span class="hljs-string">&quot;</span><span class="hljs-string">src/app.cr</span><span class="hljs-string">&quot;</span><span class="hljs-string"></span>)
+</code></pre>
+<h2 id="nil-omission">Nil Omission</h2>
+<p>Optional fields set to <code>nil</code> are omitted from JSON output. This produces clean, minimal SARIF:</p>
+<pre><code class="language-crystal hljs">result <span class="hljs-operator">=</span> <span class="hljs-variable constant_">Sarif</span><span class="hljs-variable constant_">::</span><span class="hljs-variable constant_">Result</span>.new(
+  message: <span class="hljs-variable constant_">Sarif</span><span class="hljs-variable constant_">::</span><span class="hljs-variable constant_">Message</span>.new(text: <span class="hljs-string">&quot;</span><span class="hljs-string">test</span><span class="hljs-string">&quot;</span><span class="hljs-string"></span>),
+  rule_id: <span class="hljs-string">&quot;</span><span class="hljs-string">R1</span><span class="hljs-string">&quot;</span><span class="hljs-string"></span>
+)
+result.to_json
+<span class="hljs-comment"># =&gt; {&quot;message&quot;:{&quot;text&quot;:&quot;test&quot;},&quot;ruleId&quot;:&quot;R1&quot;}</span>
+<span class="hljs-comment"># No &quot;level&quot;, &quot;locations&quot;, &quot;codeFlows&quot;, etc.</span>
+</code></pre>
+
+    
+    <nav class="page-nav" aria-label="Adjacent pages">
+      
+      <a class="page-nav-link page-nav-prev" href="https://sarif.cr.hahwul.com/user-guide/getting-started/" rel="prev">
+        <span class="page-nav-label">Previous</span>
+        <span class="page-nav-title">Getting Started</span>
+      </a>
+      
+      
+      <a class="page-nav-link page-nav-next" href="https://sarif.cr.hahwul.com/user-guide/builder/" rel="next">
+        <span class="page-nav-label">Next</span>
+        <span class="page-nav-title">Builder</span>
+      </a>
+      
+    </nav>
+    
+    <div class="docs-footer">
+      <p>sarif.cr documentation</p>
+      <div class="docs-footer-links">
+        <a href="https://github.com/hahwul/sarif.cr">GitHub</a>
+        <a href="https://github.com/hahwul/hwaro">Built with Hwaro</a>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script src="https://sarif.cr.hahwul.com/js/search.js"></script>
+<script>
+(function () {
+  var KEY = "hwaro-theme";
+  var MODES = ["auto", "light", "dark"];
+  var root = document.documentElement;
+  var btn = document.querySelector(".theme-toggle");
+  if (!btn) return;
+  function apply(mode) {
+    if (mode === "auto") {
+      root.removeAttribute("data-theme");
+      try { localStorage.removeItem(KEY); } catch (e) {}
+    } else {
+      root.setAttribute("data-theme", mode);
+      try { localStorage.setItem(KEY, mode); } catch (e) {}
+    }
+    btn.setAttribute("data-mode", mode);
+    btn.setAttribute("aria-label", "Theme: " + mode);
+    btn.title = "Theme: " + mode;
+  }
+  var stored = "auto";
+  try { var t = localStorage.getItem(KEY); if (t === "light" || t === "dark") stored = t; } catch (e) {}
+  btn.addEventListener("click", function () {
+    apply(MODES[(MODES.indexOf(btn.getAttribute("data-mode")) + 1) % MODES.length]);
+  });
+  apply(stored);
+})();
+(function () {
+  var btn = document.querySelector(".nav-toggle");
+  var scrim = document.querySelector(".sidebar-scrim");
+  var sidebar = document.getElementById("sidebar");
+  if (!btn) return;
+  function set(open) {
+    document.body.classList.toggle("nav-open", open);
+    btn.setAttribute("aria-expanded", open ? "true" : "false");
+  }
+  btn.addEventListener("click", function () {
+    set(!document.body.classList.contains("nav-open"));
+  });
+  if (scrim) scrim.addEventListener("click", function () { set(false); });
+  if (sidebar) sidebar.addEventListener("click", function (e) {
+    if (e.target.closest("a")) set(false);
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") set(false);
+  });
+})();
+</script>
+
+</body>
+</html>
