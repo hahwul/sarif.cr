@@ -204,7 +204,7 @@ module Sarif
       end
 
       if rid = reference.id
-        return rules.find(&.matches_id?(rid))
+        return component.find_rule(rid)
       end
 
       nil

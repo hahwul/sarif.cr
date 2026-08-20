@@ -181,7 +181,8 @@ module Sarif
         )
       end
 
-      rules = run.tool.driver.rules
+      driver = run.tool.driver
+      rules = driver.rules
       return unless rules
 
       if (idx = rule_index) && idx >= 0
@@ -191,7 +192,7 @@ module Sarif
       end
 
       if rid = rule_id
-        return rules.find(&.matches_id?(rid))
+        return driver.find_rule(rid)
       end
 
       nil

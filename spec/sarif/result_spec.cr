@@ -379,6 +379,44 @@ describe Sarif::Result do
       run.results.not_nil!.first.resolve_rule(run).not_nil!.id.should eq("RULE001")
     end
 
+    # `find` returns the first match in array order, so a parent rule listed
+    # before its own hierarchical child must not shadow the exact descriptor.
+    it "prefers an exact ruleId match over a hierarchical one regardless of order" do
+      rules = [
+        Sarif::ReportingDescriptor.new(
+          id: "CA5350",
+          default_configuration: Sarif::ReportingConfiguration.new(level: Sarif::Level::Note)
+        ),
+        Sarif::ReportingDescriptor.new(
+          id: "CA5350/md5",
+          default_configuration: Sarif::ReportingConfiguration.new(level: Sarif::Level::Error)
+        ),
+      ]
+      run = Sarif::Run.new(
+        tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "CodeScanner", rules: rules)),
+        results: [Sarif::Result.new(message: Sarif::Message.new(text: "test"), rule_id: "CA5350/md5")]
+      )
+      result = run.results.not_nil!.first
+      result.resolve_rule(run).not_nil!.id.should eq("CA5350/md5")
+      result.effective_level(run).should eq(Sarif::Level::Error)
+    end
+
+    it "falls back to the hierarchical parent when only it is defined" do
+      rules = [
+        Sarif::ReportingDescriptor.new(
+          id: "CA5350",
+          default_configuration: Sarif::ReportingConfiguration.new(level: Sarif::Level::Note)
+        ),
+      ]
+      run = Sarif::Run.new(
+        tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "CodeScanner", rules: rules)),
+        results: [Sarif::Result.new(message: Sarif::Message.new(text: "test"), rule_id: "CA5350/md5")]
+      )
+      result = run.results.not_nil!.first
+      result.resolve_rule(run).not_nil!.id.should eq("CA5350")
+      result.effective_level(run).should eq(Sarif::Level::Note)
+    end
+
     it "resolves a hierarchical ruleId to its descriptor" do
       rule = Sarif::ReportingDescriptor.new(
         id: "CA5350",

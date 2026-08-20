@@ -111,4 +111,42 @@ describe Sarif::ToolComponent do
     restored.organization.should eq("Test Org")
     restored.rules.not_nil![0].id.should eq("RULE1")
   end
+
+  describe "#find_rule (SARIF 2.1.0 §3.52.4)" do
+    it "returns nil when the component has no rules" do
+      Sarif::ToolComponent.new(name: "Tool").find_rule("R001").should be_nil
+    end
+
+    it "finds a rule by exact id" do
+      component = Sarif::ToolComponent.new(
+        name: "Tool", rules: [Sarif::ReportingDescriptor.new(id: "R001")]
+      )
+      component.find_rule("R001").not_nil!.id.should eq("R001")
+    end
+
+    it "falls back to a hierarchical parent" do
+      component = Sarif::ToolComponent.new(
+        name: "Tool", rules: [Sarif::ReportingDescriptor.new(id: "CA5350")]
+      )
+      component.find_rule("CA5350/md5").not_nil!.id.should eq("CA5350")
+    end
+
+    it "prefers an exact match listed after a hierarchical parent" do
+      component = Sarif::ToolComponent.new(
+        name: "Tool",
+        rules: [
+          Sarif::ReportingDescriptor.new(id: "CA5350"),
+          Sarif::ReportingDescriptor.new(id: "CA5350/md5"),
+        ]
+      )
+      component.find_rule("CA5350/md5").not_nil!.id.should eq("CA5350/md5")
+    end
+
+    it "returns nil for an unrelated id" do
+      component = Sarif::ToolComponent.new(
+        name: "Tool", rules: [Sarif::ReportingDescriptor.new(id: "CA5350")]
+      )
+      component.find_rule("CA2101").should be_nil
+    end
+  end
 end

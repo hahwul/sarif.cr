@@ -314,6 +314,22 @@ describe Sarif::Run do
       run.resolve_rule_reference(Sarif::ReportingDescriptorReference.new(id: "CA5350/md5")).not_nil!.id.should eq("CA5350")
     end
 
+    it "prefers an exact id match over a hierarchical one regardless of order" do
+      run = Sarif::Run.new(
+        tool: Sarif::Tool.new(
+          driver: Sarif::ToolComponent.new(
+            name: "Driver",
+            rules: [
+              Sarif::ReportingDescriptor.new(id: "CA5350"),
+              Sarif::ReportingDescriptor.new(id: "CA5350/md5"),
+            ]
+          )
+        )
+      )
+      reference = Sarif::ReportingDescriptorReference.new(id: "CA5350/md5")
+      run.resolve_rule_reference(reference).not_nil!.id.should eq("CA5350/md5")
+    end
+
     it "returns nil when the reference cannot be resolved" do
       run = Sarif::Run.new(tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Driver")))
       run.resolve_rule_reference(Sarif::ReportingDescriptorReference.new(id: "NOPE")).should be_nil
