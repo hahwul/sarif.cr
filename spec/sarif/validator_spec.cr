@@ -1174,12 +1174,34 @@ describe Sarif::Validator do
     result.errors.any? { |e| e.message.try(&.includes?("parentIndex")) }.should be_true
   end
 
-  it "detects negative artifact parentIndex" do
+  it "detects out-of-range negative artifact parentIndex" do
     log = Sarif::SarifLog.new(
       runs: [
         Sarif::Run.new(
           tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
           artifacts: [
+            Sarif::Artifact.new(
+              location: Sarif::ArtifactLocation.new(uri: "file.cr"),
+              parent_index: -2
+            ),
+          ]
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_false
+    result.errors.any? { |e| e.message.try(&.includes?("parentIndex must be >= -1")) }.should be_true
+  end
+
+  # -1 is the schema default for parentIndex and means "no parent" (SARIF 2.1.0
+  # §3.24, `"default": -1, "minimum": -1`).
+  it "accepts the -1 parentIndex sentinel" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+          artifacts: [
+            Sarif::Artifact.new(location: Sarif::ArtifactLocation.new(uri: "dir/")),
             Sarif::Artifact.new(
               location: Sarif::ArtifactLocation.new(uri: "file.cr"),
               parent_index: -1
@@ -1189,8 +1211,7 @@ describe Sarif::Validator do
       ]
     )
     result = Sarif::Validator.new.validate(log)
-    result.valid?.should be_false
-    result.errors.any? { |e| e.message.try(&.includes?("parentIndex")) }.should be_true
+    result.valid?.should be_true
   end
 
   it "allows valid artifact parentIndex" do
@@ -1374,5 +1395,507 @@ describe Sarif::Validator do
     result = Sarif::Validator.new.validate(log)
     result.valid?.should be_false
     result.errors.any? { |e| e.message.try(&.includes?("duplicate descriptor id: 'EXT001'")) }.should be_true
+  end
+
+  # --- Index sentinels (SARIF 2.1.0 §3.27.6, §3.52.5) ---
+
+  it "accepts the -1 ruleIndex sentinel" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(
+            driver: Sarif::ToolComponent.new(
+              name: "Tool",
+              rules: [Sarif::ReportingDescriptor.new(id: "R001")]
+            )
+          ),
+          results: [
+            Sarif::Result.new(
+              message: Sarif::Message.new(text: "issue"),
+              rule_id: "R001", rule_index: -1
+            ),
+          ]
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_true
+  end
+
+  it "detects a ruleIndex below the -1 sentinel" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+          results: [
+            Sarif::Result.new(message: Sarif::Message.new(text: "issue"), rule_index: -2),
+          ]
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_false
+    result.errors.any? { |e| e.message.try(&.includes?("ruleIndex must be >= -1")) }.should be_true
+  end
+
+  # --- Hierarchical ruleId (SARIF 2.1.0 §3.27.5, §3.52.4, §3.5.4.1) ---
+
+  it "accepts a ruleId that extends the descriptor id by one hierarchical component" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(
+            driver: Sarif::ToolComponent.new(
+              name: "CodeScanner",
+              rules: [Sarif::ReportingDescriptor.new(id: "CA5350")]
+            )
+          ),
+          results: [
+            Sarif::Result.new(
+              message: Sarif::Message.new(text: "issue"),
+              rule_id: "CA5350/md5", rule_index: 0
+            ),
+          ]
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_true
+  end
+
+  it "detects a ruleId that adds more than one hierarchical component" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(
+            driver: Sarif::ToolComponent.new(
+              name: "CodeScanner",
+              rules: [Sarif::ReportingDescriptor.new(id: "CA5350")]
+            )
+          ),
+          results: [
+            Sarif::Result.new(
+              message: Sarif::Message.new(text: "issue"),
+              rule_id: "CA5350/md5/weak", rule_index: 0
+            ),
+          ]
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_false
+    result.errors.any? { |e| e.message.try(&.includes?("does not match rule at ruleIndex")) }.should be_true
+  end
+
+  # --- rule reference consistency (SARIF 2.1.0 §3.27.7) ---
+
+  it "detects rule.id that disagrees with ruleId" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(
+            driver: Sarif::ToolComponent.new(
+              name: "Tool",
+              rules: [Sarif::ReportingDescriptor.new(id: "R001")]
+            )
+          ),
+          results: [
+            Sarif::Result.new(
+              message: Sarif::Message.new(text: "issue"),
+              rule_id: "R001",
+              rule: Sarif::ReportingDescriptorReference.new(id: "R002", index: 0)
+            ),
+          ]
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_false
+    result.errors.any? { |e| e.message.try(&.includes?("must equal ruleId")) }.should be_true
+  end
+
+  it "detects rule.index that disagrees with ruleIndex" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(
+            driver: Sarif::ToolComponent.new(
+              name: "Tool",
+              rules: [
+                Sarif::ReportingDescriptor.new(id: "R001"),
+                Sarif::ReportingDescriptor.new(id: "R002"),
+              ]
+            )
+          ),
+          results: [
+            Sarif::Result.new(
+              message: Sarif::Message.new(text: "issue"),
+              rule_index: 0,
+              rule: Sarif::ReportingDescriptorReference.new(index: 1)
+            ),
+          ]
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_false
+    result.errors.any? { |e| e.message.try(&.includes?("must equal ruleIndex")) }.should be_true
+  end
+
+  # --- Unknown enum values (SARIF 2.1.0 §3.27.9, §3.27.10) ---
+
+  it "detects an enum value outside the SARIF 2.1.0 vocabulary" do
+    json = <<-JSON
+      {
+        "version": "2.1.0",
+        "runs": [
+          {
+            "tool": {"driver": {"name": "Tool"}},
+            "results": [{"message": {"text": "issue"}, "level": "critical"}]
+          }
+        ]
+      }
+      JSON
+    log = Sarif.parse(json)
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_false
+    result.errors.any? { |e| e.path == "$.runs[0].results[0].level" }.should be_true
+  end
+
+  it "detects an unknown kind and baselineState" do
+    json = <<-JSON
+      {
+        "version": "2.1.0",
+        "runs": [
+          {
+            "tool": {"driver": {"name": "Tool"}},
+            "results": [
+              {"message": {"text": "issue"}, "kind": "bogus", "baselineState": "bogus"}
+            ]
+          }
+        ]
+      }
+      JSON
+    log = Sarif.parse(json)
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_false
+    result.errors.any? { |e| e.path == "$.runs[0].results[0].kind" }.should be_true
+    result.errors.any? { |e| e.path == "$.runs[0].results[0].baselineState" }.should be_true
+  end
+
+  it "detects an unknown columnKind" do
+    json = <<-JSON
+      {
+        "version": "2.1.0",
+        "runs": [{"tool": {"driver": {"name": "Tool"}}, "columnKind": "bogus"}]
+      }
+      JSON
+    log = Sarif.parse(json)
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_false
+    result.errors.any? { |e| e.path == "$.runs[0].columnKind" }.should be_true
+  end
+
+  it "accepts every known enum value" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+          column_kind: Sarif::ColumnKind::Utf16CodeUnits,
+          results: [
+            Sarif::Result.new(
+              message: Sarif::Message.new(text: "issue"),
+              level: Sarif::Level::Error,
+              kind: Sarif::ResultKind::Fail,
+              baseline_state: Sarif::BaselineState::New,
+              suppressions: [Sarif::Suppression.new(kind: Sarif::SuppressionKind::External)]
+            ),
+          ]
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_true
+  end
+
+  # --- contextRegion (SARIF 2.1.0 §3.29.5) ---
+
+  it "detects an invalid contextRegion" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+          results: [
+            Sarif::Result.new(
+              message: Sarif::Message.new(text: "issue"),
+              locations: [
+                Sarif::Location.new(
+                  physical_location: Sarif::PhysicalLocation.new(
+                    artifact_location: Sarif::ArtifactLocation.new(uri: "a.cr"),
+                    region: Sarif::Region.new(start_line: 10),
+                    context_region: Sarif::Region.new(start_line: 0)
+                  )
+                ),
+              ]
+            ),
+          ]
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_false
+    result.errors.any?(&.path.includes?("contextRegion.startLine")).should be_true
+  end
+
+  it "detects a contextRegion without a region" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+          results: [
+            Sarif::Result.new(
+              message: Sarif::Message.new(text: "issue"),
+              locations: [
+                Sarif::Location.new(
+                  physical_location: Sarif::PhysicalLocation.new(
+                    artifact_location: Sarif::ArtifactLocation.new(uri: "a.cr"),
+                    context_region: Sarif::Region.new(start_line: 5)
+                  )
+                ),
+              ]
+            ),
+          ]
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_false
+    result.errors.any? { |e| e.message.try(&.includes?("contextRegion must be absent")) }.should be_true
+  end
+
+  # --- Regions nested in codeFlows, fixes, stacks and annotations ---
+
+  it "detects an invalid region inside a threadFlowLocation" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+          results: [
+            Sarif::Result.new(
+              message: Sarif::Message.new(text: "issue"),
+              code_flows: [
+                Sarif::CodeFlow.new(
+                  thread_flows: [
+                    Sarif::ThreadFlow.new(
+                      locations: [
+                        Sarif::ThreadFlowLocation.new(
+                          location: Sarif::Location.new(
+                            physical_location: Sarif::PhysicalLocation.new(
+                              artifact_location: Sarif::ArtifactLocation.new(uri: "a.cr"),
+                              region: Sarif::Region.new(start_line: 0)
+                            )
+                          )
+                        ),
+                      ]
+                    ),
+                  ]
+                ),
+              ]
+            ),
+          ]
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_false
+    result.errors.any? { |e| e.message.try(&.includes?("startLine must be >= 1")) }.should be_true
+  end
+
+  it "detects an invalid deletedRegion inside a fix" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+          results: [
+            Sarif::Result.new(
+              message: Sarif::Message.new(text: "issue"),
+              fixes: [
+                Sarif::Fix.new(
+                  artifact_changes: [
+                    Sarif::ArtifactChange.new(
+                      artifact_location: Sarif::ArtifactLocation.new(uri: "a.cr"),
+                      replacements: [
+                        Sarif::Replacement.new(deleted_region: Sarif::Region.new(start_line: 5, end_line: 2)),
+                      ]
+                    ),
+                  ]
+                ),
+              ]
+            ),
+          ]
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_false
+    result.errors.any?(&.path.includes?("deletedRegion")).should be_true
+  end
+
+  it "detects an invalid location inside a stack frame" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+          results: [
+            Sarif::Result.new(
+              message: Sarif::Message.new(text: "issue"),
+              stacks: [
+                Sarif::Stack.new(
+                  frames: [
+                    Sarif::StackFrame.new(
+                      location: Sarif::Location.new(
+                        physical_location: Sarif::PhysicalLocation.new
+                      )
+                    ),
+                  ]
+                ),
+              ]
+            ),
+          ]
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_false
+    result.errors.any? { |e| e.message.try(&.includes?("artifactLocation or address")) }.should be_true
+  end
+
+  it "detects an invalid annotation region on a location" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+          results: [
+            Sarif::Result.new(
+              message: Sarif::Message.new(text: "issue"),
+              locations: [
+                Sarif::Location.new(
+                  physical_location: Sarif::PhysicalLocation.new(
+                    artifact_location: Sarif::ArtifactLocation.new(uri: "a.cr")
+                  ),
+                  annotations: [Sarif::Region.new(start_column: 0)]
+                ),
+              ]
+            ),
+          ]
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_false
+    result.errors.any?(&.path.includes?("annotations[0].startColumn")).should be_true
+  end
+
+  # --- Binary/character region offsets ---
+
+  it "detects negative region offsets and lengths" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+          results: [
+            Sarif::Result.new(
+              message: Sarif::Message.new(text: "issue"),
+              locations: [
+                Sarif::Location.new(
+                  physical_location: Sarif::PhysicalLocation.new(
+                    artifact_location: Sarif::ArtifactLocation.new(uri: "a.cr"),
+                    region: Sarif::Region.new(byte_offset: -2, byte_length: -1, char_offset: -3, char_length: -1)
+                  )
+                ),
+              ]
+            ),
+          ]
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_false
+    result.errors.any? { |e| e.message.try(&.includes?("byteOffset must be >= -1")) }.should be_true
+    result.errors.any? { |e| e.message.try(&.includes?("byteLength must be >= 0")) }.should be_true
+    result.errors.any? { |e| e.message.try(&.includes?("charOffset must be >= -1")) }.should be_true
+    result.errors.any? { |e| e.message.try(&.includes?("charLength must be >= 0")) }.should be_true
+  end
+
+  it "accepts the -1 region offset sentinels" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+          results: [
+            Sarif::Result.new(
+              message: Sarif::Message.new(text: "issue"),
+              locations: [
+                Sarif::Location.new(
+                  physical_location: Sarif::PhysicalLocation.new(
+                    artifact_location: Sarif::ArtifactLocation.new(uri: "a.cr"),
+                    region: Sarif::Region.new(byte_offset: -1, char_offset: -1)
+                  )
+                ),
+              ]
+            ),
+          ]
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_true
+  end
+
+  # --- Notifications ---
+
+  it "detects a notification message without text or id" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+          invocations: [
+            Sarif::Invocation.new(
+              execution_successful: true,
+              tool_execution_notifications: [
+                Sarif::Notification.new(message: Sarif::Message.new, time_utc: "not-a-time"),
+              ]
+            ),
+          ]
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_false
+    result.errors.any? { |e| e.message.try(&.includes?("Notification message must have either text or id")) }.should be_true
+    result.errors.any?(&.path.includes?("timeUtc")).should be_true
+  end
+
+  # --- Suppressions ---
+
+  it "detects an invalid suppression guid" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+          results: [
+            Sarif::Result.new(
+              message: Sarif::Message.new(text: "issue"),
+              suppressions: [
+                Sarif::Suppression.new(kind: Sarif::SuppressionKind::InSource, guid: "not-a-guid"),
+              ]
+            ),
+          ]
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_false
+    result.errors.any? { |e| e.path == "$.runs[0].results[0].suppressions[0].guid" }.should be_true
   end
 end

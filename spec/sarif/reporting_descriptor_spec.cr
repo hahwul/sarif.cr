@@ -144,4 +144,30 @@ describe Sarif::ReportingDescriptor do
     restored = Sarif::ReportingDescriptor.from_json(json)
     restored.properties.not_nil!["severity"].as_s.should eq("high")
   end
+
+  describe "#matches_id? (SARIF 2.1.0 §3.52.4)" do
+    it "matches an identical id" do
+      Sarif::ReportingDescriptor.new(id: "CA5350").matches_id?("CA5350").should be_true
+    end
+
+    it "matches an id extended by exactly one hierarchical component" do
+      Sarif::ReportingDescriptor.new(id: "CA5350").matches_id?("CA5350/md5").should be_true
+    end
+
+    it "does not match an id extended by more than one component" do
+      Sarif::ReportingDescriptor.new(id: "CA5350").matches_id?("CA5350/md5/weak").should be_false
+    end
+
+    it "does not match an id that is only a character prefix" do
+      Sarif::ReportingDescriptor.new(id: "abc/def").matches_id?("abc/defg").should be_false
+    end
+
+    it "does not match an empty trailing component" do
+      Sarif::ReportingDescriptor.new(id: "CA5350").matches_id?("CA5350/").should be_false
+    end
+
+    it "does not match an unrelated id" do
+      Sarif::ReportingDescriptor.new(id: "CA5350").matches_id?("CA2101").should be_false
+    end
+  end
 end

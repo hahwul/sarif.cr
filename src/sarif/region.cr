@@ -46,6 +46,24 @@ module Sarif
                    @source_language : String? = nil, @properties : PropertyBag? = nil)
     end
 
+    # The binary and character offsets use -1 as their "absent" sentinel; the
+    # matching lengths have no sentinel and are simply non-negative.
+    private def offsets_valid? : Bool
+      if (bo = byte_offset) && bo < -1
+        return false
+      end
+      if (co = char_offset) && co < -1
+        return false
+      end
+      if (bl = byte_length) && bl < 0
+        return false
+      end
+      if (cl = char_length) && cl < 0
+        return false
+      end
+      true
+    end
+
     def valid? : Bool
       if (sl = start_line) && sl < 1
         return false
@@ -59,6 +77,7 @@ module Sarif
       if (ec = end_column) && ec < 1
         return false
       end
+      return false unless offsets_valid?
       if (sl = start_line) && (el = end_line)
         return false if el < sl
         if el == sl && (sc = start_column) && (ec = end_column) && ec < sc

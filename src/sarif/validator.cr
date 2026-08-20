@@ -17,6 +17,13 @@ module Sarif
     private RFC3339_PATTERN = /\A\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})\z/
     private URI_PATTERN     = /\A[a-zA-Z][a-zA-Z0-9+\-.]*:/
 
+    # The sentinel every index-valued property in the SARIF 2.1.0 schema uses
+    # for "no referent": `ruleIndex`, `parentIndex`, `artifactLocation.index`
+    # and friends are all declared `"default": -1, "minimum": -1`, so -1 is a
+    # legal value that resolves to nothing, and only values below it are
+    # out of range.
+    private NO_INDEX = -1
+
     getter max_results : Int32?
     getter max_runs : Int32?
     getter max_depth : Int32
@@ -69,18 +76,16 @@ module Sarif
         validate_array_limit(results, max_results, "#{path}.results", "results", errors)
       end
 
-      run.results.try &.each_with_index do |result, j|
-        validate_result(result, run, "#{path}.results[#{j}]", errors, depth: depth + 1)
-      end
-
-      # Validate index references in results
       artifact_count = run.artifacts.try(&.size) || 0
       logical_location_count = run.logical_locations.try(&.size) || 0
 
       run.results.try &.each_with_index do |result, j|
         result_path = "#{path}.results[#{j}]"
+        validate_result(result, run, result_path, errors, depth: depth + 1)
         validate_result_index_references(result, result_path, artifact_count, logical_location_count, errors)
       end
+
+      validate_enum(run.column_kind, "#{path}.columnKind", errors)
 
       run.invocations.try &.each_with_index do |inv, j|
         validate_invocation(inv, "#{path}.invocations[#{j}]", errors, depth: depth)
@@ -121,6 +126,10 @@ module Sarif
       validate_guid(component.guid, "#{path}.guid", errors)
       validate_uri(component.download_uri, "#{path}.downloadUri", errors)
       validate_uri(component.information_uri, "#{path}.informationUri", errors)
+
+      component.contents.try &.each_with_index do |content, i|
+        validate_enum(content, "#{path}.contents[#{i}]", errors)
+      end
 
       if rules = component.rules
         validate_descriptor_id_uniqueness(rules, "#{path}.rules", errors)
@@ -177,20 +186,11 @@ module Sarif
         )
       end
 
-      if rule_index = result.rule_index
-        rules = run.tool.driver.rules
-        if rules.nil? || rule_index < 0 || rule_index >= rules.size
-          errors << ValidationError.new(
-            "Invalid ruleIndex: #{rule_index}",
-            "#{path}.ruleIndex"
-          )
-        elsif (rule_id = result.rule_id) && rules[rule_index].id != rule_id
-          errors << ValidationError.new(
-            "ruleId '#{rule_id}' does not match rule at ruleIndex #{rule_index} ('#{rules[rule_index].id}')",
-            "#{path}.ruleId"
-          )
-        end
-      end
+      validate_result_rule(result, run, path, errors)
+
+      validate_enum(result.level, "#{path}.level", errors)
+      validate_enum(result.kind, "#{path}.kind", errors)
+      validate_enum(result.baseline_state, "#{path}.baselineState", errors)
 
       validate_guid(result.guid, "#{path}.guid", errors)
       validate_guid(result.correlation_guid, "#{path}.correlationGuid", errors)
@@ -237,8 +237,78 @@ module Sarif
         validate_fix(fix, "#{path}.fixes[#{k}]", errors)
       end
 
+      result.suppressions.try &.each_with_index do |suppression, k|
+        validate_suppression(suppression, "#{path}.suppressions[#{k}]", errors)
+      end
+
       if provenance = result.provenance
         validate_result_provenance(provenance, "#{path}.provenance", errors)
+      end
+    end
+
+    # Validates the rule reference triple `ruleIndex` / `ruleId` / `rule`.
+    #
+    # `ruleIndex` carries the `reportingDescriptorReference.index` semantics
+    # (§3.27.6, §3.52.5): -1 means "no descriptor", so only a value below -1 is
+    # malformed and only a non-negative value has to address an existing rule.
+    # A `ruleId` identifies the descriptor it addresses when it equals the
+    # descriptor's id or extends it by exactly one hierarchical component
+    # (§3.27.5, §3.52.4). `rule.id` and `rule.index` default to `ruleId` and
+    # `ruleIndex` respectively, and SHALL be equal when both are present
+    # (§3.27.7).
+    private def validate_result_rule(result : Result, run : Run, path : String,
+                                     errors : Array(ValidationError))
+      rules = run.tool.driver.rules
+
+      if rule_index = result.rule_index
+        if rule_index < NO_INDEX
+          errors << ValidationError.new(
+            "ruleIndex must be >= -1, got #{rule_index}",
+            "#{path}.ruleIndex"
+          )
+        elsif rule_index != NO_INDEX
+          if rules && rule_index < rules.size
+            descriptor = rules[rule_index]
+            if (rule_id = result.rule_id) && !descriptor.matches_id?(rule_id)
+              errors << ValidationError.new(
+                "ruleId '#{rule_id}' does not match rule at ruleIndex #{rule_index} ('#{descriptor.id}')",
+                "#{path}.ruleId"
+              )
+            end
+          else
+            errors << ValidationError.new(
+              "Invalid ruleIndex: #{rule_index}",
+              "#{path}.ruleIndex"
+            )
+          end
+        end
+      end
+
+      return unless reference = result.rule
+
+      if (reference_id = reference.id) && (rule_id = result.rule_id) && reference_id != rule_id
+        errors << ValidationError.new(
+          "rule.id '#{reference_id}' must equal ruleId '#{rule_id}'",
+          "#{path}.rule.id"
+        )
+      end
+
+      if (reference_index = reference.index) && (rule_index = result.rule_index) && reference_index != rule_index
+        errors << ValidationError.new(
+          "rule.index #{reference_index} must equal ruleIndex #{rule_index}",
+          "#{path}.rule.index"
+        )
+      end
+    end
+
+    private def validate_suppression(suppression : Suppression, path : String,
+                                     errors : Array(ValidationError))
+      validate_enum(suppression.kind, "#{path}.kind", errors)
+      validate_enum(suppression.status, "#{path}.status", errors)
+      validate_guid(suppression.guid, "#{path}.guid", errors)
+
+      if location = suppression.location
+        validate_location(location, "#{path}.location", errors)
       end
     end
 
@@ -287,15 +357,28 @@ module Sarif
       end
 
       inv.tool_execution_notifications.try &.each_with_index do |notif, i|
-        if ex = notif.sarif_exception
-          validate_exception(ex, "#{path}.toolExecutionNotifications[#{i}].exception", errors, depth: depth + 1)
-        end
+        validate_notification(notif, "#{path}.toolExecutionNotifications[#{i}]", errors, depth: depth + 1)
       end
 
       inv.tool_configuration_notifications.try &.each_with_index do |notif, i|
-        if ex = notif.sarif_exception
-          validate_exception(ex, "#{path}.toolConfigurationNotifications[#{i}].exception", errors, depth: depth + 1)
-        end
+        validate_notification(notif, "#{path}.toolConfigurationNotifications[#{i}]", errors, depth: depth + 1)
+      end
+    end
+
+    private def validate_notification(notif : Notification, path : String,
+                                      errors : Array(ValidationError), *, depth : Int32)
+      if notif.message.text.nil? && notif.message.id.nil?
+        errors << ValidationError.new(
+          "Notification message must have either text or id",
+          "#{path}.message"
+        )
+      end
+
+      validate_enum(notif.level, "#{path}.level", errors)
+      validate_timestamp(notif.time_utc, "#{path}.timeUtc", errors)
+
+      if ex = notif.sarif_exception
+        validate_exception(ex, "#{path}.exception", errors, depth: depth)
       end
     end
 
@@ -309,11 +392,28 @@ module Sarif
         )
       end
 
-      if (pi = artifact.parent_index) && artifact_count > 0 && (pi < 0 || pi >= artifact_count || pi == artifact_index)
-        errors << ValidationError.new(
-          "artifact parentIndex #{pi} is out of range (#{artifact_count} artifacts defined)",
-          "#{path}.parentIndex"
-        )
+      # -1 is the schema default and means "this artifact has no parent".
+      if pi = artifact.parent_index
+        if pi < NO_INDEX
+          errors << ValidationError.new(
+            "artifact parentIndex must be >= -1, got #{pi}",
+            "#{path}.parentIndex"
+          )
+        elsif pi == artifact_index
+          errors << ValidationError.new(
+            "artifact parentIndex #{pi} must not reference the artifact itself",
+            "#{path}.parentIndex"
+          )
+        elsif pi != NO_INDEX && artifact_count > 0 && pi >= artifact_count
+          errors << ValidationError.new(
+            "artifact parentIndex #{pi} is out of range (#{artifact_count} artifacts defined)",
+            "#{path}.parentIndex"
+          )
+        end
+      end
+
+      artifact.roles.try &.each_with_index do |role, i|
+        validate_enum(role, "#{path}.roles[#{i}]", errors)
       end
 
       validate_timestamp(artifact.last_modified_time_utc, "#{path}.lastModifiedTimeUtc", errors)
@@ -345,6 +445,15 @@ module Sarif
             "#{path}.threadFlows[#{i}].locations"
           )
         end
+
+        tf.locations.each_with_index do |tfl, j|
+          tfl_path = "#{path}.threadFlows[#{i}].locations[#{j}]"
+          validate_enum(tfl.importance, "#{tfl_path}.importance", errors)
+          validate_timestamp(tfl.execution_time_utc, "#{tfl_path}.executionTimeUtc", errors)
+          if location = tfl.location
+            validate_location(location, "#{tfl_path}.location", errors)
+          end
+        end
       end
     end
 
@@ -363,6 +472,14 @@ module Sarif
             "#{path}.artifactChanges[#{i}].replacements"
           )
         end
+
+        change.replacements.each_with_index do |replacement, j|
+          validate_region(
+            replacement.deleted_region,
+            "#{path}.artifactChanges[#{i}].replacements[#{j}].deletedRegion",
+            errors
+          )
+        end
       end
     end
 
@@ -370,6 +487,10 @@ module Sarif
                                   errors : Array(ValidationError))
       if physical = location.physical_location
         validate_physical_location(physical, "#{path}.physicalLocation", errors)
+      end
+
+      location.annotations.try &.each_with_index do |annotated_region, i|
+        validate_region(annotated_region, "#{path}.annotations[#{i}]", errors)
       end
     end
 
@@ -384,6 +505,18 @@ module Sarif
 
       if region = physical.region
         validate_region(region, "#{path}.region", errors)
+      end
+
+      if context_region = physical.context_region
+        validate_region(context_region, "#{path}.contextRegion", errors)
+
+        # A contextRegion only has meaning as a superset of region (§3.29.5).
+        if physical.region.nil?
+          errors << ValidationError.new(
+            "contextRegion must be absent when region is absent",
+            "#{path}.contextRegion"
+          )
+        end
       end
     end
 
@@ -417,6 +550,8 @@ module Sarif
         )
       end
 
+      validate_region_offsets(region, path, errors)
+
       if (sl = region.start_line) && (el = region.end_line)
         if el < sl
           errors << ValidationError.new(
@@ -431,6 +566,40 @@ module Sarif
             )
           end
         end
+      end
+    end
+
+    # -1 is the schema default for the binary and character offsets and means
+    # "absent"; the matching lengths have no such sentinel and are simply
+    # non-negative.
+    private def validate_region_offsets(region : Region, path : String,
+                                        errors : Array(ValidationError))
+      if (bo = region.byte_offset) && bo < NO_INDEX
+        errors << ValidationError.new(
+          "byteOffset must be >= -1, got #{bo}",
+          "#{path}.byteOffset"
+        )
+      end
+
+      if (bl = region.byte_length) && bl < 0
+        errors << ValidationError.new(
+          "byteLength must be >= 0, got #{bl}",
+          "#{path}.byteLength"
+        )
+      end
+
+      if (co = region.char_offset) && co < NO_INDEX
+        errors << ValidationError.new(
+          "charOffset must be >= -1, got #{co}",
+          "#{path}.charOffset"
+        )
+      end
+
+      if (cl = region.char_length) && cl < 0
+        errors << ValidationError.new(
+          "charLength must be >= 0, got #{cl}",
+          "#{path}.charLength"
+        )
       end
     end
 
@@ -452,6 +621,21 @@ module Sarif
           path
         )
       end
+    end
+
+    # Reports an enum-valued property whose input string was outside the SARIF
+    # 2.1.0 vocabulary. Tolerant deserialization (the default, see
+    # `Sarif.strict_enums`) maps such a string onto the enum's `Unknown`
+    # sentinel so one bad value cannot abort a whole document parse; validation
+    # is where those values have to surface.
+    private def validate_enum(value : T?, path : String, errors : Array(ValidationError)) forall T
+      return unless value
+      return unless value == T::Unknown
+
+      errors << ValidationError.new(
+        "Value is not part of the SARIF 2.1.0 vocabulary for this property",
+        path
+      )
     end
 
     private def validate_uri(value : String?, path : String, errors : Array(ValidationError))
@@ -482,6 +666,12 @@ module Sarif
           "stack must have at least one frame",
           "#{path}.frames"
         )
+      end
+
+      stack.frames.each_with_index do |frame, i|
+        if location = frame.location
+          validate_location(location, "#{path}.frames[#{i}].location", errors)
+        end
       end
     end
 
@@ -570,6 +760,8 @@ module Sarif
 
     private def validate_reporting_configuration(config : ReportingConfiguration, path : String,
                                                  errors : Array(ValidationError))
+      validate_enum(config.level, "#{path}.level", errors)
+
       if (rank = config.rank) && (rank < 0.0 || rank > 100.0)
         errors << ValidationError.new(
           "rank must be between 0.0 and 100.0, got #{rank}",

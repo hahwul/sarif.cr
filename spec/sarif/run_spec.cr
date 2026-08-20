@@ -250,4 +250,89 @@ describe Sarif::Run do
       run.valid?.should be_true
     end
   end
+
+  describe "#tool_component_for (SARIF 2.1.0 §3.54.2)" do
+    it "returns the driver for a nil reference" do
+      run = Sarif::Run.new(tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Driver")))
+      run.tool_component_for(nil).not_nil!.name.should eq("Driver")
+    end
+
+    it "returns the driver for a reference with neither index nor guid" do
+      run = Sarif::Run.new(tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Driver")))
+      run.tool_component_for(Sarif::ToolComponentReference.new(name: "Driver")).not_nil!.name.should eq("Driver")
+    end
+
+    it "selects an extension by index" do
+      run = Sarif::Run.new(
+        tool: Sarif::Tool.new(
+          driver: Sarif::ToolComponent.new(name: "Driver"),
+          extensions: [Sarif::ToolComponent.new(name: "Plugin")]
+        )
+      )
+      run.tool_component_for(Sarif::ToolComponentReference.new(index: 0)).not_nil!.name.should eq("Plugin")
+    end
+
+    it "returns nil for an out-of-range extension index" do
+      run = Sarif::Run.new(tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Driver")))
+      run.tool_component_for(Sarif::ToolComponentReference.new(index: 3)).should be_nil
+    end
+
+    it "selects a component by guid" do
+      guid = "11111111-2222-3333-4444-555555555555"
+      run = Sarif::Run.new(
+        tool: Sarif::Tool.new(
+          driver: Sarif::ToolComponent.new(name: "Driver"),
+          extensions: [Sarif::ToolComponent.new(name: "Plugin", guid: guid)]
+        )
+      )
+      run.tool_component_for(Sarif::ToolComponentReference.new(guid: guid)).not_nil!.name.should eq("Plugin")
+    end
+  end
+
+  describe "#resolve_rule_reference (SARIF 2.1.0 §3.52.3)" do
+    it "resolves by index within the referenced component" do
+      run = Sarif::Run.new(
+        tool: Sarif::Tool.new(
+          driver: Sarif::ToolComponent.new(name: "Driver"),
+          extensions: [
+            Sarif::ToolComponent.new(name: "Plugin", rules: [Sarif::ReportingDescriptor.new(id: "EXT001")]),
+          ]
+        )
+      )
+      reference = Sarif::ReportingDescriptorReference.new(
+        index: 0, tool_component: Sarif::ToolComponentReference.new(index: 0)
+      )
+      run.resolve_rule_reference(reference).not_nil!.id.should eq("EXT001")
+    end
+
+    it "resolves by hierarchical id" do
+      run = Sarif::Run.new(
+        tool: Sarif::Tool.new(
+          driver: Sarif::ToolComponent.new(name: "Driver", rules: [Sarif::ReportingDescriptor.new(id: "CA5350")])
+        )
+      )
+      run.resolve_rule_reference(Sarif::ReportingDescriptorReference.new(id: "CA5350/md5")).not_nil!.id.should eq("CA5350")
+    end
+
+    it "prefers an exact id match over a hierarchical one regardless of order" do
+      run = Sarif::Run.new(
+        tool: Sarif::Tool.new(
+          driver: Sarif::ToolComponent.new(
+            name: "Driver",
+            rules: [
+              Sarif::ReportingDescriptor.new(id: "CA5350"),
+              Sarif::ReportingDescriptor.new(id: "CA5350/md5"),
+            ]
+          )
+        )
+      )
+      reference = Sarif::ReportingDescriptorReference.new(id: "CA5350/md5")
+      run.resolve_rule_reference(reference).not_nil!.id.should eq("CA5350/md5")
+    end
+
+    it "returns nil when the reference cannot be resolved" do
+      run = Sarif::Run.new(tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Driver")))
+      run.resolve_rule_reference(Sarif::ReportingDescriptorReference.new(id: "NOPE")).should be_nil
+    end
+  end
 end

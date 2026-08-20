@@ -109,5 +109,18 @@ module Sarif
                    @locations : Array(ArtifactLocation)? = nil,
                    @properties : PropertyBag? = nil)
     end
+
+    # Finds the rule that `reference_id` identifies, or nil when there is none.
+    #
+    # An exact `id` equality is the primary identification, so it wins over the
+    # hierarchical form (`"CA5350"` matching `"CA5350/md5"`) no matter which
+    # descriptor comes first in `rules`.
+    #
+    # See: [SARIF 2.1.0 §3.52.4](https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html#_Toc34317871)
+    def find_rule(reference_id : String) : ReportingDescriptor?
+      return unless descriptors = rules
+      descriptors.find { |r| r.id == reference_id } ||
+        descriptors.find(&.matches_id?(reference_id))
+    end
   end
 end

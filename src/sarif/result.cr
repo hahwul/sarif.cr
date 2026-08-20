@@ -118,11 +118,23 @@ module Sarif
     # - If `level` is set explicitly, it is returned.
     # - Else, if `kind` is present and not `fail` (pass/notApplicable/review/
     #   open/informational), the effective level is `none`.
-    # - Else (kind is `fail` or absent) the level is inherited from the
-    #   associated rule's `defaultConfiguration.level` when a `run` is supplied
-    #   and the rule is resolvable, otherwise it falls back to `warning`.
+    # - Else (kind is `fail` or absent) the level is taken from the associated
+    #   rule's configuration when a `run` is supplied and the rule is
+    #   resolvable: a matching `configurationOverride` reachable through
+    #   `provenance.invocationIndex` wins over the rule's
+    #   `defaultConfiguration.level`.
+    # - Else it falls back to `warning`.
     #
     # See: [SARIF 2.1.0 §3.27.10](https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html#_Toc34317648)
+    #
+    # NOTE: the pseudocode in §3.27.10 attaches its `ELSE` branch to the
+    # `invocationIndex >= 0` test, which would discard the rule's
+    # `defaultConfiguration.level` whenever provenance names an invocation that
+    # happens to carry no override for the rule. That reading makes an unrelated
+    # provenance annotation silently downgrade a configured `error` to
+    # `warning`, so the override is applied as an override here: it takes
+    # precedence when present, and `defaultConfiguration.level` still applies
+    # when it is not.
     #
     # The `run` argument is optional for backward compatibility: when omitted,
     # the kind-based part of the algorithm still applies and the method falls
@@ -136,25 +148,75 @@ module Sarif
         return Level::None
       end
 
-      if run && (rule = resolve_rule(run)) && (config = rule.default_configuration) && (rule_level = config.level)
-        return rule_level
+      if run && (descriptor = resolve_rule(run))
+        if override_level = resolve_override_level(run, descriptor)
+          return override_level
+        end
+        if (config = descriptor.default_configuration) && (rule_level = config.level)
+          return rule_level
+        end
       end
 
       Level::Warning
     end
 
-    # Resolves the `ReportingDescriptor` associated with this result against the
-    # given run's `tool.driver.rules`, preferring `rule_index` then `rule_id`.
+    # Resolves the `ReportingDescriptor` associated with this result.
+    #
+    # `rule` (§3.27.7) selects the tool component and takes precedence, with its
+    # absent `id`/`index` defaulting to this result's `ruleId`/`ruleIndex`.
+    # Otherwise the run's `tool.driver.rules` are searched by `rule_index` then
+    # `rule_id`. An index of `-1` is the "no descriptor" sentinel and never
+    # resolves.
+    #
+    # See: [SARIF 2.1.0 §3.27.7](https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html#_Toc34317645)
     def resolve_rule(run : Run) : ReportingDescriptor?
-      rules = run.tool.driver.rules
+      if reference = rule
+        return run.resolve_rule_reference(
+          ReportingDescriptorReference.new(
+            id: reference.id || rule_id,
+            index: reference.index || rule_index,
+            guid: reference.guid,
+            tool_component: reference.tool_component
+          )
+        )
+      end
+
+      driver = run.tool.driver
+      rules = driver.rules
       return unless rules
 
-      if idx = rule_index
-        return rules[idx]? if idx >= 0
+      if (idx = rule_index) && idx >= 0
+        if descriptor = rules[idx]?
+          return descriptor
+        end
       end
 
       if rid = rule_id
-        return rules.find { |r| r.id == rid }
+        return driver.find_rule(rid)
+      end
+
+      nil
+    end
+
+    # Returns the level set by the `configurationOverride` that this result's
+    # `provenance.invocationIndex` points at, or nil when there is none.
+    #
+    # See: [SARIF 2.1.0 §3.20.5](https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html#_Toc34317566)
+    private def resolve_override_level(run : Run, descriptor : ReportingDescriptor) : Level?
+      idx = provenance.try &.invocation_index
+      return unless idx && idx >= 0
+
+      invocation = run.invocations.try &.[idx]?
+      return unless invocation
+
+      overrides = invocation.rule_configuration_overrides
+      return unless overrides
+
+      overrides.each do |override|
+        next unless run.resolve_rule_reference(override.descriptor).try &.same?(descriptor)
+        if lvl = override.configuration.level
+          return lvl
+        end
       end
 
       nil
