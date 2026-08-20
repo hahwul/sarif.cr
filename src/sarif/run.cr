@@ -155,6 +155,61 @@ module Sarif
       tool.driver.rules.try &.find { |r| r.id == rule_id }
     end
 
+    # Resolves a `ToolComponentReference` to the `ToolComponent` it identifies.
+    #
+    # - A `nil` reference, or one with neither `index` nor `guid`, denotes the driver.
+    # - `index` selects the element of `tool.extensions` at that array index.
+    # - Otherwise `guid` matches either the driver or one of the extensions.
+    #
+    # Returns `nil` when the reference cannot be resolved.
+    #
+    # See: [SARIF 2.1.0 §3.54.2](https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html#_Toc34317884)
+    def tool_component_for(reference : ToolComponentReference?) : ToolComponent?
+      return tool.driver unless reference
+
+      if (idx = reference.index) && idx >= 0
+        return tool.extensions.try &.[idx]?
+      end
+
+      if guid = reference.guid
+        return tool.driver if tool.driver.guid == guid
+        return tool.extensions.try &.find { |ext| ext.guid == guid }
+      end
+
+      tool.driver
+    end
+
+    # Resolves a `ReportingDescriptorReference` to the rule it identifies.
+    #
+    # The reference's `toolComponent` selects the component to search; `index`
+    # then `guid` then `id` select the descriptor within it.
+    #
+    # See: [SARIF 2.1.0 §3.52.3](https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html#_Toc34317870)
+    def resolve_rule_reference(reference : ReportingDescriptorReference) : ReportingDescriptor?
+      component = tool_component_for(reference.tool_component)
+      return unless component
+      rules = component.rules
+      return unless rules
+
+      if (idx = reference.index) && idx >= 0
+        if descriptor = rules[idx]?
+          return descriptor
+        end
+      end
+
+      if guid = reference.guid
+        if descriptor = rules.find { |r| r.guid == guid }
+          return descriptor
+        end
+      end
+
+      if rid = reference.id
+        return rules.find(&.matches_id?(rid))
+      end
+
+      nil
+    end
+
     def valid? : Bool
       return false if tool.driver.name.empty?
       results.try &.each do |result|
