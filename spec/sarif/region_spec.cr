@@ -144,4 +144,26 @@ describe Sarif::Region do
     restored = Sarif::Region.from_json(json)
     restored.properties.not_nil!["tag"].as_s.should eq("test")
   end
+
+  describe "#valid? binary and character offsets" do
+    it "accepts the -1 offset sentinels" do
+      Sarif::Region.new(byte_offset: -1, char_offset: -1).valid?.should be_true
+    end
+
+    it "returns false when byteOffset is below -1" do
+      Sarif::Region.new(byte_offset: -2).valid?.should be_false
+    end
+
+    it "returns false when charOffset is below -1" do
+      Sarif::Region.new(char_offset: -2).valid?.should be_false
+    end
+
+    it "returns false when byteLength is negative" do
+      Sarif::Region.new(byte_length: -1).valid?.should be_false
+    end
+
+    it "returns false when charLength is negative" do
+      Sarif::Region.new(char_length: -1).valid?.should be_false
+    end
+  end
 end
