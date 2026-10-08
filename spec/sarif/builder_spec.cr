@@ -536,4 +536,19 @@ describe Sarif::Builder do
     result = Sarif::Validator.new.validate(log)
     result.valid?.should be_true
   end
+
+  it "omits an empty physicalLocation when neither uri nor region is given (§3.29.2)" do
+    log = Sarif::Builder.build do |b|
+      b.run("Tool") do |r|
+        r.result do |res|
+          res.message("m")
+          res.code_flow(&.thread_flow(&.location(message: "step")))
+        end
+      end
+    end
+    loc = log.runs[0].results.not_nil![0].code_flows.not_nil![0].thread_flows[0].locations[0].location.not_nil!
+    loc.physical_location.should be_nil
+    loc.message.not_nil!.text.should eq("step")
+    Sarif::Validator.new.validate(log).valid?.should be_true
+  end
 end
