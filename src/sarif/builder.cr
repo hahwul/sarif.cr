@@ -41,7 +41,8 @@ module Sarif
                  end_line: end_line, end_column: end_column)
              end
     artifact_loc = uri ? ArtifactLocation.new(uri: uri) : nil
-    physical = PhysicalLocation.new(artifact_location: artifact_loc, region: region)
+    # An empty physicalLocation is invalid (§3.29.2), so omit it entirely.
+    physical = PhysicalLocation.new(artifact_location: artifact_loc, region: region) if artifact_loc || region
     Location.new(physical_location: physical)
   end
 

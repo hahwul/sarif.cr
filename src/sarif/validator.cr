@@ -103,6 +103,12 @@ module Sarif
         validate_graph(graph, "#{path}.graphs[#{j}]", errors)
       end
 
+      run.thread_flow_locations.try &.each_with_index do |tfl, j|
+        if location = tfl.location
+          validate_location(location, "#{path}.threadFlowLocations[#{j}].location", errors)
+        end
+      end
+
       if refs = run.external_property_file_references
         validate_external_property_file_references(refs, "#{path}.externalPropertyFileReferences", errors)
       end
@@ -377,6 +383,10 @@ module Sarif
       validate_enum(notif.level, "#{path}.level", errors)
       validate_timestamp(notif.time_utc, "#{path}.timeUtc", errors)
 
+      notif.locations.try &.each_with_index do |loc, i|
+        validate_location(loc, "#{path}.locations[#{i}]", errors)
+      end
+
       if ex = notif.sarif_exception
         validate_exception(ex, "#{path}.exception", errors, depth: depth)
       end
@@ -522,6 +532,15 @@ module Sarif
 
     private def validate_region(region : Region, path : String,
                                 errors : Array(ValidationError))
+      # A region SHALL define a text region or a binary region (§3.30.1); the
+      # schema requires at least one of startLine, charOffset or byteOffset.
+      if region.start_line.nil? && region.char_offset.nil? && region.byte_offset.nil?
+        errors << ValidationError.new(
+          "region must define a text region (startLine or charOffset) or a binary region (byteOffset)",
+          path
+        )
+      end
+
       if (sl = region.start_line) && sl < 1
         errors << ValidationError.new(
           "startLine must be >= 1, got #{sl}",
@@ -651,9 +670,10 @@ module Sarif
 
     private def validate_graph_traversal(gt : GraphTraversal, path : String,
                                          errors : Array(ValidationError))
-      if gt.run_graph_index.nil? && gt.result_graph_index.nil?
+      # Exactly one of the two SHALL be present (§3.42.2).
+      if gt.run_graph_index.nil? == gt.result_graph_index.nil?
         errors << ValidationError.new(
-          "graphTraversal must have either runGraphIndex or resultGraphIndex",
+          "graphTraversal must have exactly one of runGraphIndex or resultGraphIndex",
           path
         )
       end
@@ -661,13 +681,6 @@ module Sarif
 
     private def validate_stack(stack : Stack, path : String,
                                errors : Array(ValidationError))
-      if stack.frames.empty?
-        errors << ValidationError.new(
-          "stack must have at least one frame",
-          "#{path}.frames"
-        )
-      end
-
       stack.frames.each_with_index do |frame, i|
         if location = frame.location
           validate_location(location, "#{path}.frames[#{i}].location", errors)
@@ -710,6 +723,10 @@ module Sarif
         )
       else
         seen_ids << node.id
+      end
+
+      if location = node.location
+        validate_location(location, "#{path}.location", errors)
       end
 
       node.children.try &.each_with_index do |child, i|

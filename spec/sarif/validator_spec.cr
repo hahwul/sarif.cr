@@ -694,7 +694,7 @@ describe Sarif::Validator do
 
   # minItems / non-empty constraint validations
 
-  it "detects empty stack frames" do
+  it "accepts a stack with zero frames (§3.44.3)" do
     log = Sarif::SarifLog.new(
       runs: [
         Sarif::Run.new(
@@ -711,8 +711,7 @@ describe Sarif::Validator do
       ]
     )
     result = Sarif::Validator.new.validate(log)
-    result.valid?.should be_false
-    result.errors.any? { |e| e.message.try(&.includes?("at least one frame")) }.should be_true
+    result.valid?.should be_true
   end
 
   it "detects empty node id" do
@@ -1897,5 +1896,80 @@ describe Sarif::Validator do
     result = Sarif::Validator.new.validate(log)
     result.valid?.should be_false
     result.errors.any? { |e| e.path == "$.runs[0].results[0].suppressions[0].guid" }.should be_true
+  end
+
+  # --- Spec-compliance regressions ---
+
+  it "rejects a graphTraversal with both runGraphIndex and resultGraphIndex (§3.42.2)" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+          results: [
+            Sarif::Result.new(
+              message: Sarif::Message.new(text: "issue"),
+              graph_traversals: [Sarif::GraphTraversal.new(run_graph_index: 0, result_graph_index: 0)]
+            ),
+          ]
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_false
+    result.errors.any? { |e| e.message.try(&.includes?("exactly one of runGraphIndex or resultGraphIndex")) }.should be_true
+  end
+
+  it "rejects a region that defines neither a text nor a binary region (§3.30.1)" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+          results: [
+            Sarif::Result.new(
+              message: Sarif::Message.new(text: "issue"),
+              locations: [
+                Sarif::Location.new(
+                  physical_location: Sarif::PhysicalLocation.new(
+                    artifact_location: Sarif::ArtifactLocation.new(uri: "a.cr"),
+                    region: Sarif::Region.new(char_length: 1)
+                  )
+                ),
+              ]
+            ),
+          ]
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.valid?.should be_false
+    result.errors.map(&.path).should contain("$.runs[0].results[0].locations[0].physicalLocation.region")
+  end
+
+  it "validates locations in graph nodes, notifications and run.threadFlowLocations" do
+    bad = Sarif::Location.new(physical_location: Sarif::PhysicalLocation.new(
+      artifact_location: Sarif::ArtifactLocation.new(uri: "a.cr"),
+      region: Sarif::Region.new(start_line: 0)
+    ))
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+          graphs: [Sarif::Graph.new(nodes: [Sarif::Node.new(id: "n", location: bad)])],
+          thread_flow_locations: [Sarif::ThreadFlowLocation.new(location: bad)],
+          invocations: [
+            Sarif::Invocation.new(
+              execution_successful: true,
+              tool_execution_notifications: [
+                Sarif::Notification.new(message: Sarif::Message.new(text: "n"), locations: [bad]),
+              ]
+            ),
+          ]
+        ),
+      ]
+    )
+    paths = Sarif::Validator.new.validate(log).errors.map(&.path)
+    paths.should contain("$.runs[0].graphs[0].nodes[0].location.physicalLocation.region.startLine")
+    paths.should contain("$.runs[0].threadFlowLocations[0].location.physicalLocation.region.startLine")
+    paths.should contain("$.runs[0].invocations[0].toolExecutionNotifications[0].locations[0].physicalLocation.region.startLine")
   end
 end
