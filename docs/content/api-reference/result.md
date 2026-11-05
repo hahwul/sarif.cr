@@ -26,7 +26,7 @@ Sarif::Result.new(
 |----------|------|----------|-------------|
 | `message` | `Message` | `message` | Description of the result (required) |
 | `rule_id` | `String?` | `ruleId` | Stable identifier for the rule |
-| `rule_index` | `Int32?` | `ruleIndex` | Index into `tool.driver.rules` |
+| `rule_index` | `Int32?` | `ruleIndex` | Index into the rules of the component named by `rule.toolComponent` (default `tool.driver`) |
 | `rule` | `ReportingDescriptorReference?` | `rule` | Reference to the rule |
 | `kind` | `ResultKind?` | `kind` | Classification of the result |
 | `level` | `Level?` | `level` | Severity level |

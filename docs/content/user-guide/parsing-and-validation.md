@@ -95,7 +95,7 @@ The validator checks for:
 - **Version** -- Must be `"2.1.0"`
 - **Tool driver name** -- Must not be empty
 - **Result message** -- Must have either `text` or `id`
-- **Rule index** -- `ruleIndex` must reference a valid rule in the driver
+- **Rule index** -- `ruleIndex` must reference a valid rule in the tool component named by `rule.toolComponent` (the driver by default)
 - **Rule ID consistency** -- `ruleId` must match the rule at `ruleIndex`
 - **GUID format** -- Must be valid UUID
 - **Timestamp format** -- Must be RFC 3339

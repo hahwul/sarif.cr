@@ -76,6 +76,65 @@ describe Sarif::Validator do
     result.errors.any? { |e| e.message.try(&.includes?("Invalid ruleIndex")) }.should be_true
   end
 
+  it "resolves ruleIndex in the extension named by rule.toolComponent (§3.27.6, §3.52.3)" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(
+            driver: Sarif::ToolComponent.new(name: "Tool",
+              rules: [Sarif::ReportingDescriptor.new(id: "D0")]),
+            extensions: [
+              Sarif::ToolComponent.new(name: "Plugin", rules: [
+                Sarif::ReportingDescriptor.new(id: "E0"),
+                Sarif::ReportingDescriptor.new(id: "E1"),
+              ]),
+            ]
+          ),
+          results: [
+            Sarif::Result.new(
+              message: Sarif::Message.new(text: "issue"),
+              rule_id: "E1", rule_index: 1,
+              rule: Sarif::ReportingDescriptorReference.new(
+                id: "E1", index: 1,
+                tool_component: Sarif::ToolComponentReference.new(index: 0)
+              )
+            ),
+          ]
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.errors.should be_empty
+  end
+
+  it "still checks ruleId against the extension rule at ruleIndex" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(
+            driver: Sarif::ToolComponent.new(name: "Tool",
+              rules: [Sarif::ReportingDescriptor.new(id: "D0")]),
+            extensions: [
+              Sarif::ToolComponent.new(name: "Plugin",
+                rules: [Sarif::ReportingDescriptor.new(id: "E0")]),
+            ]
+          ),
+          results: [
+            Sarif::Result.new(
+              message: Sarif::Message.new(text: "issue"),
+              rule_id: "D0", rule_index: 0,
+              rule: Sarif::ReportingDescriptorReference.new(
+                tool_component: Sarif::ToolComponentReference.new(index: 0)
+              )
+            ),
+          ]
+        ),
+      ]
+    )
+    result = Sarif::Validator.new.validate(log)
+    result.errors.any? { |e| e.message.try(&.includes?("does not match rule at ruleIndex 0 ('E0')")) }.should be_true
+  end
+
   it "detects ruleId mismatch with ruleIndex" do
     log = Sarif::SarifLog.new(
       runs: [
@@ -438,6 +497,84 @@ describe Sarif::Validator do
     result = Sarif::Validator.new.validate(log)
     result.valid?.should be_false
     result.errors.any? { |e| e.message.try(&.includes?("endTimeUtc must not be before startTimeUtc")) }.should be_true
+  end
+
+  it "orders invocation times as instants, not strings" do
+    # "…00Z" sorts after "…00.5Z" as a string, yet is the earlier instant.
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+          invocations: [
+            Sarif::Invocation.new(
+              execution_successful: true,
+              start_time_utc: "2024-01-01T00:00:00Z",
+              end_time_utc: "2024-01-01T00:00:00.5Z"
+            ),
+          ]
+        ),
+      ]
+    )
+    Sarif::Validator.new.validate(log).valid?.should be_true
+  end
+
+  it "orders invocation times across offsets" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+          invocations: [
+            Sarif::Invocation.new(
+              execution_successful: true,
+              start_time_utc: "2024-01-01T10:00:00+09:00",
+              end_time_utc: "2024-01-01T02:00:00Z"
+            ),
+          ]
+        ),
+      ]
+    )
+    Sarif::Validator.new.validate(log).valid?.should be_true
+  end
+
+  it "does not raise on timestamps Crystal cannot parse and still orders them" do
+    ["+99:00", ".0000000001Z"].each do |suffix|
+      log = Sarif::SarifLog.new(
+        runs: [
+          Sarif::Run.new(
+            tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+            invocations: [
+              Sarif::Invocation.new(
+                execution_successful: true,
+                start_time_utc: "2025-01-01T00:00:00#{suffix}",
+                end_time_utc: "2024-01-01T00:00:00Z"
+              ),
+            ]
+          ),
+        ]
+      )
+      result = Sarif::Validator.new.validate(log)
+      result.errors.any? { |e| e.message.try(&.includes?("endTimeUtc must not be before startTimeUtc")) }.should be_true
+    end
+  end
+
+  it "orders provenance detection times as instants, not strings" do
+    log = Sarif::SarifLog.new(
+      runs: [
+        Sarif::Run.new(
+          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+          results: [
+            Sarif::Result.new(
+              message: Sarif::Message.new(text: "issue"),
+              provenance: Sarif::ResultProvenance.new(
+                first_detection_time_utc: "2024-06-01T10:00:00Z",
+                last_detection_time_utc: "2024-06-01T10:00:00.123Z"
+              )
+            ),
+          ]
+        ),
+      ]
+    )
+    Sarif::Validator.new.validate(log).valid?.should be_true
   end
 
   it "detects empty codeFlow threadFlows" do
@@ -1033,9 +1170,9 @@ describe Sarif::Validator do
     result.errors.any? { |e| e.message.try(&.includes?("artifact index")) }.should be_true
   end
 
-  # --- Rule ID uniqueness ---
+  # --- Rule ID uniqueness (not required: §3.19.23, §3.19.24) ---
 
-  it "detects duplicate rule IDs within driver.rules" do
+  it "allows duplicate rule IDs within driver.rules (§3.19.23)" do
     log = Sarif::SarifLog.new(
       runs: [
         Sarif::Run.new(
@@ -1051,8 +1188,7 @@ describe Sarif::Validator do
       ]
     )
     result = Sarif::Validator.new.validate(log)
-    result.valid?.should be_false
-    result.errors.any? { |e| e.message.try(&.includes?("duplicate descriptor id: 'R001'")) }.should be_true
+    result.valid?.should be_true
   end
 
   it "allows unique rule IDs" do
@@ -1074,7 +1210,7 @@ describe Sarif::Validator do
     result.valid?.should be_true
   end
 
-  it "detects duplicate notification IDs" do
+  it "allows duplicate notification IDs (§3.19.24)" do
     log = Sarif::SarifLog.new(
       runs: [
         Sarif::Run.new(
@@ -1089,8 +1225,7 @@ describe Sarif::Validator do
       ]
     )
     result = Sarif::Validator.new.validate(log)
-    result.valid?.should be_false
-    result.errors.any? { |e| e.message.try(&.includes?("duplicate descriptor id")) }.should be_true
+    result.valid?.should be_true
   end
 
   # --- Edge→Node reference integrity ---
@@ -1372,7 +1507,7 @@ describe Sarif::Validator do
 
   # --- Duplicate rule IDs in extensions ---
 
-  it "detects duplicate rule IDs in tool extensions" do
+  it "allows duplicate rule IDs in tool extensions (§3.19.23)" do
     log = Sarif::SarifLog.new(
       runs: [
         Sarif::Run.new(
@@ -1392,8 +1527,7 @@ describe Sarif::Validator do
       ]
     )
     result = Sarif::Validator.new.validate(log)
-    result.valid?.should be_false
-    result.errors.any? { |e| e.message.try(&.includes?("duplicate descriptor id: 'EXT001'")) }.should be_true
+    result.valid?.should be_true
   end
 
   # --- Index sentinels (SARIF 2.1.0 §3.27.6, §3.52.5) ---
