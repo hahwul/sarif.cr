@@ -137,33 +137,17 @@ module Sarif
         validate_enum(content, "#{path}.contents[#{i}]", errors)
       end
 
+      # Descriptor ids need not be unique within rules or notifications
+      # (§3.19.23, §3.19.24); `index` disambiguates them.
       if rules = component.rules
-        validate_descriptor_id_uniqueness(rules, "#{path}.rules", errors)
         rules.each_with_index do |rule, i|
           validate_reporting_descriptor(rule, "#{path}.rules[#{i}]", errors)
         end
       end
 
       if notifs = component.notifications
-        validate_descriptor_id_uniqueness(notifs, "#{path}.notifications", errors)
         notifs.each_with_index do |notif, i|
           validate_reporting_descriptor(notif, "#{path}.notifications[#{i}]", errors)
-        end
-      end
-    end
-
-    private def validate_descriptor_id_uniqueness(descriptors : Array(ReportingDescriptor), path : String,
-                                                  errors : Array(ValidationError))
-      seen_ids = Set(String).new
-      descriptors.each_with_index do |desc, i|
-        next if desc.id.empty?
-        if seen_ids.includes?(desc.id)
-          errors << ValidationError.new(
-            "duplicate descriptor id: '#{desc.id}'",
-            "#{path}[#{i}].id"
-          )
-        else
-          seen_ids << desc.id
         end
       end
     end
@@ -261,10 +245,11 @@ module Sarif
     # descriptor's id or extends it by exactly one hierarchical component
     # (§3.27.5, §3.52.4). `rule.id` and `rule.index` default to `ruleId` and
     # `ruleIndex` respectively, and SHALL be equal when both are present
-    # (§3.27.7).
+    # (§3.27.7). The descriptor lives in the component that `rule.toolComponent`
+    # names, which defaults to the driver (§3.27.6, §3.52.3).
     private def validate_result_rule(result : Result, run : Run, path : String,
                                      errors : Array(ValidationError))
-      rules = run.tool.driver.rules
+      rules = run.tool_component_for(result.rule.try(&.tool_component)).try(&.rules)
 
       if rule_index = result.rule_index
         if rule_index < NO_INDEX
@@ -326,7 +311,7 @@ module Sarif
       validate_guid(provenance.last_detection_run_guid, "#{path}.lastDetectionRunGuid", errors)
 
       if (first = provenance.first_detection_time_utc) && (last = provenance.last_detection_time_utc)
-        if first > last
+        if timestamps_reversed?(first, last)
           errors << ValidationError.new(
             "lastDetectionTimeUtc must not be before firstDetectionTimeUtc",
             "#{path}.lastDetectionTimeUtc"
@@ -354,7 +339,7 @@ module Sarif
       validate_timestamp(inv.end_time_utc, "#{path}.endTimeUtc", errors)
 
       if (start_time = inv.start_time_utc) && (end_time = inv.end_time_utc)
-        if start_time > end_time
+        if timestamps_reversed?(start_time, end_time)
           errors << ValidationError.new(
             "endTimeUtc must not be before startTimeUtc",
             "#{path}.endTimeUtc"
@@ -640,6 +625,17 @@ module Sarif
           path
         )
       end
+    end
+
+    # True when `later` is an earlier instant than `earlier`. Comparing the raw
+    # strings misorders fractional seconds and offsets ("…00.5Z" sorts before
+    # "…00Z"), so instants are compared; values Crystal cannot parse (leap
+    # seconds, more than nine fractional digits, out-of-range offsets) fall
+    # back to string order.
+    private def timestamps_reversed?(earlier : String, later : String) : Bool
+      Time::Format::RFC_3339.parse(earlier) > Time::Format::RFC_3339.parse(later)
+    rescue Time::Format::Error | Time::Error | ArgumentError
+      earlier > later
     end
 
     # Reports an enum-valued property whose input string was outside the SARIF
