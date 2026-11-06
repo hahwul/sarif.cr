@@ -9,7 +9,7 @@ module Sarif
 
   # The root object of a SARIF log file.
   #
-  # A `SarifLog` contains one or more `Run` objects, each representing
+  # A `SarifLog` contains zero or more `Run` objects (or `null` runs when the tool failed to start), each representing
   # a single invocation of a static analysis tool.
   #
   # ```
@@ -30,7 +30,15 @@ module Sarif
     @[JSON::Field(key: "$schema")]
     property schema : String? = nil
 
-    property runs : Array(Run)
+    # `null` when the tool failed to start or could not construct a run
+    # (§3.13.4); `[]` when it ran but no runs were performed. The key is
+    # always emitted, as `"runs": null` when nil. Use `#runs!` when a `null`
+    # runs array is not acceptable to the caller.
+    @[JSON::Field(emit_null: true, presence: true)]
+    property runs : Array(Run)?
+
+    @[JSON::Field(ignore: true)]
+    @runs_present = false
 
     @[JSON::Field(key: "inlineExternalProperties")]
     property inline_external_properties : Array(ExternalProperties)? = nil
@@ -38,15 +46,29 @@ module Sarif
     @[JSON::Field(key: "properties")]
     property properties : PropertyBag? = nil
 
-    def initialize(@runs : Array(Run), @version : String = SARIF_VERSION,
+    def initialize(@runs : Array(Run)?, @version : String = SARIF_VERSION,
                    @schema : String? = SARIF_SCHEMA,
                    @inline_external_properties : Array(ExternalProperties)? = nil,
                    @properties : PropertyBag? = nil)
     end
 
+    # `runs` is nilable but still required (§3.13.4): reject a missing key
+    # while accepting an explicit `null`.
+    protected def after_initialize
+      unless @runs_present
+        raise JSON::SerializableError.new("Missing JSON attribute: runs", self.class.to_s, "runs", 0, 0, nil)
+      end
+    end
+
+    # Returns `runs`, raising `Sarif::Error` if it is `null` (the tool
+    # failed to start, §3.13.4).
+    def runs! : Array(Run)
+      runs || raise Error.new("SarifLog runs is null (the tool failed to start)")
+    end
+
     # Returns all results from all runs, flattened into a single array.
     def all_results : Array(Result)
-      runs.flat_map { |run| run.results || [] of Result }
+      runs.try(&.flat_map { |run| run.results || [] of Result }) || [] of Result
     end
 
     # Returns results matching the given severity level across all runs.
@@ -54,7 +76,7 @@ module Sarif
     # rule `defaultConfiguration.level` inheritance is honored.
     def results_by_level(level : Level) : Array(Result)
       matched = [] of Result
-      runs.each do |run|
+      runs.try &.each do |run|
         run.results.try &.each do |r|
           matched << r if r.effective_level(run) == level
         end
@@ -72,7 +94,7 @@ module Sarif
     def find_results(rule_id : String? = nil, level : Level? = nil,
                      kind : ResultKind? = nil) : Array(Result)
       matched = [] of Result
-      runs.each do |run|
+      runs.try &.each do |run|
         run.results.try &.each do |r|
           next if rule_id && r.rule_id != rule_id
           next if level && r.effective_level(run) != level
@@ -101,7 +123,7 @@ module Sarif
     # Returns a hash mapping each severity level to the count of results at that level.
     def result_counts_by_level : Hash(Level, Int32)
       counts = {} of Level => Int32
-      runs.each do |run|
+      runs.try &.each do |run|
         run.results.try &.each do |r|
           lvl = r.effective_level(run)
           counts[lvl] = (counts[lvl]? || 0) + 1
@@ -125,7 +147,7 @@ module Sarif
     # For comprehensive validation, use `Validator#validate`.
     def valid? : Bool
       return false unless version == SARIF_VERSION
-      runs.each do |run|
+      runs.try &.each do |run|
         return false unless run.valid?
       end
       true

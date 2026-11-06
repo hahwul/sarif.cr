@@ -10,7 +10,7 @@ The top-level object in a SARIF document. Every valid SARIF file is a single `Sa
 
 ```crystal
 Sarif::SarifLog.new(
-  runs : Array(Sarif::Run),
+  runs : Array(Sarif::Run)?,
   version : String = "2.1.0",
   schema : String? = Sarif::SARIF_SCHEMA,
   inline_external_properties : Array(Sarif::ExternalProperties)? = nil,
@@ -22,7 +22,7 @@ Sarif::SarifLog.new(
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `runs` | `Array(Run)` | Yes | The set of runs contained in this log |
+| `runs` | `Array(Run)?` | Yes | The set of runs contained in this log; `nil` (serialized as `"runs": null`) when the tool failed to start (§3.13.4) |
 | `version` | `String` | Yes | SARIF version, defaults to `"2.1.0"` |
 | `schema` | `String?` | No | JSON schema URI |
 | `inline_external_properties` | `Array(ExternalProperties)?` | No | Inline external property collections |
@@ -34,7 +34,7 @@ Sarif::SarifLog.new(
 |----------|------|----------|-------------|
 | `version` | `String` | `version` | SARIF specification version |
 | `schema` | `String?` | `$schema` | JSON schema URI for validation |
-| `runs` | `Array(Run)` | `runs` | Array of analysis runs |
+| `runs` | `Array(Run)?` | `runs` | Array of analysis runs, or `nil` if the tool failed to start. Always emitted |
 | `inline_external_properties` | `Array(ExternalProperties)?` | `inlineExternalProperties` | External property collections |
 | `properties` | `PropertyBag?` | `properties` | Custom key-value pairs |
 
@@ -53,6 +53,14 @@ log = Sarif::SarifLog.from_json(File.read("results.sarif"))
 ```
 
 ## Instance Methods
+
+### `#runs!`
+
+```crystal
+log.runs! : Array(Sarif::Run)
+```
+
+Returns `runs`, raising `Sarif::Error` when it is `null`. Logs built with `Sarif::Builder` always have a runs array.
 
 ### `#to_json`
 

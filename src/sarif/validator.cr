@@ -35,7 +35,9 @@ module Sarif
       errors = [] of ValidationError
 
       validate_version(log, errors)
-      validate_array_limit(log.runs, max_runs, "$.runs", "runs", errors)
+      if runs = log.runs
+        validate_array_limit(runs, max_runs, "$.runs", "runs", errors)
+      end
       validate_runs(log, errors, depth: 1)
 
       ValidationResult.new(errors)
@@ -62,7 +64,7 @@ module Sarif
     end
 
     private def validate_runs(log : SarifLog, errors : Array(ValidationError), *, depth : Int32)
-      log.runs.each_with_index do |run, i|
+      log.runs.try &.each_with_index do |run, i|
         validate_run(run, "$.runs[#{i}]", errors, depth: depth)
       end
     end

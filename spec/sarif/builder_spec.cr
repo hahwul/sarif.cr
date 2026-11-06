@@ -6,15 +6,15 @@ describe Sarif::Builder do
       b.run("MyTool") { }
     end
     log.version.should eq("2.1.0")
-    log.runs.size.should eq(1)
-    log.runs[0].tool.driver.name.should eq("MyTool")
+    log.runs!.size.should eq(1)
+    log.runs![0].tool.driver.name.should eq("MyTool")
   end
 
   it "builds with version" do
     log = Sarif::Builder.build do |b|
       b.run("MyTool", "1.0.0") { }
     end
-    log.runs[0].tool.driver.version.should eq("1.0.0")
+    log.runs![0].tool.driver.version.should eq("1.0.0")
   end
 
   it "builds with results" do
@@ -24,7 +24,7 @@ describe Sarif::Builder do
           level: Sarif::Level::Warning, uri: "src/main.cr", start_line: 10)
       end
     end
-    results = log.runs[0].results.not_nil!
+    results = log.runs![0].results.not_nil!
     results.size.should eq(1)
     results[0].message.text.should eq("Unused variable")
     results[0].rule_id.should eq("LINT001")
@@ -44,12 +44,12 @@ describe Sarif::Builder do
         r.result("Shadowed var", rule_id: "R002", level: Sarif::Level::Error)
       end
     end
-    rules = log.runs[0].tool.driver.rules.not_nil!
+    rules = log.runs![0].tool.driver.rules.not_nil!
     rules.size.should eq(2)
     rules[0].id.should eq("R001")
     rules[1].id.should eq("R002")
 
-    results = log.runs[0].results.not_nil!
+    results = log.runs![0].results.not_nil!
     results[0].rule_index.should eq(0)
     results[1].rule_index.should eq(1)
   end
@@ -66,7 +66,7 @@ describe Sarif::Builder do
         end
       end
     end
-    result = log.runs[0].results.not_nil![0]
+    result = log.runs![0].results.not_nil![0]
     result.message.text.should eq("Complex issue")
     result.message.markdown.should eq("**Complex** issue")
     result.rule_id.should eq("R1")
@@ -81,7 +81,7 @@ describe Sarif::Builder do
         r.artifact("src/main.cr", mime_type: "text/x-crystal")
       end
     end
-    artifacts = log.runs[0].artifacts.not_nil!
+    artifacts = log.runs![0].artifacts.not_nil!
     artifacts.size.should eq(1)
     artifacts[0].location.not_nil!.uri.should eq("src/main.cr")
     artifacts[0].mime_type.should eq("text/x-crystal")
@@ -93,7 +93,7 @@ describe Sarif::Builder do
         r.invocation(true, "tool --check .")
       end
     end
-    invocations = log.runs[0].invocations.not_nil!
+    invocations = log.runs![0].invocations.not_nil!
     invocations.size.should eq(1)
     invocations[0].execution_successful.should be_true
     invocations[0].command_line.should eq("tool --check .")
@@ -104,9 +104,9 @@ describe Sarif::Builder do
       b.run("Tool1", &.result("Issue 1"))
       b.run("Tool2", &.result("Issue 2"))
     end
-    log.runs.size.should eq(2)
-    log.runs[0].tool.driver.name.should eq("Tool1")
-    log.runs[1].tool.driver.name.should eq("Tool2")
+    log.runs!.size.should eq(2)
+    log.runs![0].tool.driver.name.should eq("Tool1")
+    log.runs![1].tool.driver.name.should eq("Tool2")
   end
 
   it "builds with code_flows via ResultBuilder" do
@@ -132,7 +132,7 @@ describe Sarif::Builder do
         end
       end
     end
-    result = log.runs[0].results.not_nil![0]
+    result = log.runs![0].results.not_nil![0]
     result.code_flows.not_nil!.size.should eq(1)
   end
 
@@ -160,7 +160,7 @@ describe Sarif::Builder do
         end
       end
     end
-    result = log.runs[0].results.not_nil![0]
+    result = log.runs![0].results.not_nil![0]
     result.fixes.not_nil!.size.should eq(1)
     result.fixes.not_nil![0].description.not_nil!.text.should eq("Apply fix")
   end
@@ -194,7 +194,7 @@ describe Sarif::Builder do
         end
       end
     end
-    result = log.runs[0].results.not_nil![0]
+    result = log.runs![0].results.not_nil![0]
     code_flows = result.code_flows.not_nil!
     code_flows.size.should eq(1)
     code_flows[0].message.not_nil!.text.should eq("Data flow")
@@ -221,7 +221,7 @@ describe Sarif::Builder do
         end
       end
     end
-    result = log.runs[0].results.not_nil![0]
+    result = log.runs![0].results.not_nil![0]
     fixes = result.fixes.not_nil!
     fixes.size.should eq(1)
     fixes[0].description.not_nil!.text.should eq("Replace deprecated call")
@@ -244,7 +244,7 @@ describe Sarif::Builder do
         end
       end
     end
-    result = log.runs[0].results.not_nil![0]
+    result = log.runs![0].results.not_nil![0]
     suppressions = result.suppressions.not_nil!
     suppressions.size.should eq(2)
     suppressions[0].kind.should eq(Sarif::SuppressionKind::InSource)
@@ -269,7 +269,7 @@ describe Sarif::Builder do
         end
       end
     end
-    code_flow = log.runs[0].results.not_nil![0].code_flows.not_nil![0]
+    code_flow = log.runs![0].results.not_nil![0].code_flows.not_nil![0]
     code_flow.thread_flows.size.should eq(2)
     code_flow.thread_flows[0].id.should eq("thread-1")
     code_flow.thread_flows[1].id.should eq("thread-2")
@@ -289,7 +289,7 @@ describe Sarif::Builder do
         end
       end
     end
-    locs = log.runs[0].results.not_nil![0].code_flows.not_nil![0].thread_flows[0].locations
+    locs = log.runs![0].results.not_nil![0].code_flows.not_nil![0].thread_flows[0].locations
     locs[0].importance.should eq(Sarif::Importance::Essential)
     locs[0].nesting_level.should eq(0)
     locs[1].importance.should eq(Sarif::Importance::Unimportant)
@@ -303,7 +303,7 @@ describe Sarif::Builder do
         r.result("Issue", rule_id: "NONEXISTENT", level: Sarif::Level::Warning)
       end
     end
-    result = log.runs[0].results.not_nil![0]
+    result = log.runs![0].results.not_nil![0]
     result.rule_id.should eq("NONEXISTENT")
     result.rule_index.should be_nil
   end
@@ -314,7 +314,7 @@ describe Sarif::Builder do
         r.result("No location")
       end
     end
-    result = log.runs[0].results.not_nil![0]
+    result = log.runs![0].results.not_nil![0]
     result.locations.should be_nil
   end
 
@@ -322,7 +322,7 @@ describe Sarif::Builder do
     log = Sarif::Builder.build do |b|
       b.run("EmptyTool") { }
     end
-    run = log.runs[0]
+    run = log.runs![0]
     run.results.should be_nil
     run.artifacts.should be_nil
     run.invocations.should be_nil
@@ -353,7 +353,7 @@ describe Sarif::Builder do
         end
       end
     end
-    graphs = log.runs[0].graphs.not_nil!
+    graphs = log.runs![0].graphs.not_nil!
     graphs.size.should eq(1)
     graphs[0].description.not_nil!.text.should eq("Call graph")
     graphs[0].nodes.not_nil!.size.should eq(2)
@@ -377,7 +377,7 @@ describe Sarif::Builder do
         end
       end
     end
-    result = log.runs[0].results.not_nil![0]
+    result = log.runs![0].results.not_nil![0]
     result.graphs.not_nil!.size.should eq(1)
     result.graphs.not_nil![0].nodes.not_nil!.size.should eq(2)
   end
@@ -396,7 +396,7 @@ describe Sarif::Builder do
         end
       end
     end
-    result = log.runs[0].results.not_nil![0]
+    result = log.runs![0].results.not_nil![0]
     stacks = result.stacks.not_nil!
     stacks.size.should eq(1)
     stacks[0].message.not_nil!.text.should eq("Exception stack")
@@ -419,7 +419,7 @@ describe Sarif::Builder do
         )
       end
     end
-    vcp = log.runs[0].version_control_provenance.not_nil!
+    vcp = log.runs![0].version_control_provenance.not_nil!
     vcp.size.should eq(1)
     vcp[0].repository_uri.should eq("https://github.com/example/repo")
     vcp[0].revision_id.should eq("abc123")
@@ -434,7 +434,7 @@ describe Sarif::Builder do
         r.version_control(repository_uri: "https://github.com/b/repo", revision_tag: "v1.0")
       end
     end
-    vcp = log.runs[0].version_control_provenance.not_nil!
+    vcp = log.runs![0].version_control_provenance.not_nil!
     vcp.size.should eq(2)
     vcp[1].revision_tag.should eq("v1.0")
   end
@@ -457,7 +457,7 @@ describe Sarif::Builder do
         end
       end
     end
-    result = log.runs[0].results.not_nil![0]
+    result = log.runs![0].results.not_nil![0]
     req = result.web_request.not_nil!
     req.target.should eq("/api/users")
     req.method.should eq("POST")
@@ -481,7 +481,7 @@ describe Sarif::Builder do
         end
       end
     end
-    result = log.runs[0].results.not_nil![0]
+    result = log.runs![0].results.not_nil![0]
     resp = result.web_response.not_nil!
     resp.status_code.should eq(500)
     resp.reason_phrase.should eq("Internal Server Error")
@@ -499,7 +499,7 @@ describe Sarif::Builder do
         end
       end
     end
-    result = log.runs[0].results.not_nil![0]
+    result = log.runs![0].results.not_nil![0]
     result.web_request.not_nil!.target.should eq("/search?q=<script>")
     result.web_response.not_nil!.status_code.should eq(200)
   end
@@ -546,7 +546,7 @@ describe Sarif::Builder do
         end
       end
     end
-    loc = log.runs[0].results.not_nil![0].code_flows.not_nil![0].thread_flows[0].locations[0].location.not_nil!
+    loc = log.runs![0].results.not_nil![0].code_flows.not_nil![0].thread_flows[0].locations[0].location.not_nil!
     loc.physical_location.should be_nil
     loc.message.not_nil!.text.should eq("step")
     Sarif::Validator.new.validate(log).valid?.should be_true

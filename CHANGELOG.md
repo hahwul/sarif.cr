@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+### Breaking changes
+
+- `SarifLog#runs` is now `Array(Run)?` (was `Array(Run)`), and `SarifLog.new(runs:)` accepts `nil`. SARIF 2.1.0 §3.13.4 allows `"runs": null` when the tool failed to start; such logs now parse and round-trip as `"runs": null` (the key is always emitted). A missing `runs` key is still rejected. Migrate `log.runs[0]` to `log.runs![0]` (raises `Sarif::Error` on null) or `log.runs.try &.each`. Query helpers (`all_results`, `find_results`, ...), `valid?` and `Validator` treat null runs as empty.
+- `Region#byte_offset`, `#byte_length`, `#char_offset`, `#char_length` and `Artifact#offset` are now `Int64?` (were `Int32?`) so files larger than 2 GiB can be described. Integer literals still autocast; `Int32` variables passed to these setters/constructors need `.to_i64`.
+
+### Added
+
+- `SarifLog#runs!`.
+
+### Fixed
+
+- A leading UTF-8 byte order mark is ignored when parsing from a String, IO or file (RFC 8259 §8.1). Output never contains a BOM.
+
 ## v0.2.0
 
 ### Added

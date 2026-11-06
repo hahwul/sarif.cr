@@ -25,7 +25,7 @@ module Sarif
     @[JSON::Field(key: "parentIndex")]
     property parent_index : Int32? = nil
 
-    property offset : Int32? = nil
+    property offset : Int64? = nil
 
     property description : Message? = nil
 
@@ -40,7 +40,7 @@ module Sarif
                    @hashes : Hash(String, String)? = nil,
                    @length : Int64? = nil, @mime_type : String? = nil,
                    @encoding : String? = nil, @source_language : String? = nil,
-                   @parent_index : Int32? = nil, @offset : Int32? = nil,
+                   @parent_index : Int32? = nil, @offset : Int64? = nil,
                    @description : Message? = nil,
                    @last_modified_time_utc : String? = nil,
                    @properties : PropertyBag? = nil)

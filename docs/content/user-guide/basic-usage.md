@@ -151,7 +151,7 @@ open_issues = log.find_results(kind: Sarif::ResultKind::Open)
 The same methods are available on individual `Run` objects:
 
 ```crystal
-run = log.runs[0]
+run = log.runs![0]
 warnings = run.find_results(level: Sarif::Level::Warning)
 ```
 

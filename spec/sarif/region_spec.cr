@@ -166,4 +166,13 @@ describe Sarif::Region do
       Sarif::Region.new(char_length: -1).valid?.should be_false
     end
   end
+
+  it "round-trips offsets and lengths beyond Int32 (files > 2 GiB)" do
+    big = 5_000_000_000_i64
+    json = %({"byteOffset": #{big}, "byteLength": #{big}, "charOffset": #{big}, "charLength": #{big}})
+    region = Sarif::Region.from_json(json)
+    region.byte_offset.should eq(big)
+    region.char_length.should eq(big)
+    JSON.parse(region.to_json)["charOffset"].as_i64.should eq(big)
+  end
 end

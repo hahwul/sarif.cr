@@ -82,10 +82,10 @@ Sarif::Region.new(
   start_column : Int32? = nil,
   end_line : Int32? = nil,
   end_column : Int32? = nil,
-  byte_offset : Int32? = nil,
-  byte_length : Int32? = nil,
-  char_offset : Int32? = nil,
-  char_length : Int32? = nil,
+  byte_offset : Int64? = nil,
+  byte_length : Int64? = nil,
+  char_offset : Int64? = nil,
+  char_length : Int64? = nil,
   snippet : Sarif::ArtifactContent? = nil,
   message : Sarif::Message? = nil,
   source_language : String? = nil
@@ -98,10 +98,10 @@ Sarif::Region.new(
 | `start_column` | `Int32?` | `startColumn` | 1-based start column |
 | `end_line` | `Int32?` | `endLine` | 1-based end line |
 | `end_column` | `Int32?` | `endColumn` | 1-based exclusive end column |
-| `byte_offset` | `Int32?` | `byteOffset` | Byte offset from file start |
-| `byte_length` | `Int32?` | `byteLength` | Region length in bytes |
-| `char_offset` | `Int32?` | `charOffset` | Character offset |
-| `char_length` | `Int32?` | `charLength` | Region length in characters |
+| `byte_offset` | `Int64?` | `byteOffset` | Byte offset from file start |
+| `byte_length` | `Int64?` | `byteLength` | Region length in bytes |
+| `char_offset` | `Int64?` | `charOffset` | Character offset |
+| `char_length` | `Int64?` | `charLength` | Region length in characters |
 | `snippet` | `ArtifactContent?` | `snippet` | Source code snippet |
 | `source_language` | `String?` | `sourceLanguage` | Language of the region |
 

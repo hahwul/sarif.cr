@@ -14,7 +14,7 @@ Parse a JSON string into a `SarifLog`:
 json = File.read("results.sarif")
 log = Sarif.parse(json)
 
-log.runs.each do |run|
+log.runs.try &.each do |run|
   puts "Tool: #{run.tool.driver.name}"
   run.results.try &.each do |result|
     puts "  #{result.level}: #{result.message.text}"
@@ -116,7 +116,7 @@ After parsing, you can navigate the full object graph:
 
 ```crystal
 log = Sarif.from_file("eslint-results.sarif")
-run = log.runs[0]
+run = log.runs![0]
 
 # Access tool info
 puts run.tool.driver.name      # => "ESLint"
