@@ -54,9 +54,36 @@ module Sarif
 
     # `runs` is nilable but still required (§3.13.4): reject a missing key
     # while accepting an explicit `null`.
-    protected def after_initialize
-      unless @runs_present
-        raise JSON::SerializableError.new("Missing JSON attribute: runs", self.class.to_s, "runs", 0, 0, nil)
+    def self.new(pull : JSON::PullParser)
+      line, column = pull.location
+      log = previous_def
+      unless log.@runs_present
+        raise JSON::SerializableError.new("Missing JSON attribute: runs", to_s, "runs", line, column, nil)
+      end
+      log
+    end
+
+    # Like `Object.from_json`, but ignores a leading UTF-8 byte order mark
+    # (RFC 8259 §8.1). Output never contains one.
+    def self.from_json(string_or_io : String | IO) : self
+      new JSON::PullParser.new(skip_bom(string_or_io))
+    end
+
+    private BOM = "\uFEFF"
+
+    private def self.skip_bom(json : String) : String | IO
+      return json unless json.starts_with?(BOM)
+      IO::Memory.new(json).tap(&.skip(BOM.bytesize)) # read-only view, no copy
+    end
+
+    private def self.skip_bom(io : IO) : String | IO
+      head = io.peek
+      if head && head.size >= BOM.bytesize
+        io.skip(BOM.bytesize) if head[0, BOM.bytesize] == BOM.to_slice
+        io
+      else
+        # `peek` unsupported, or a short first read (pipe/socket): buffer it.
+        skip_bom(io.gets_to_end)
       end
     end
 

@@ -389,6 +389,13 @@ module Sarif
         )
       end
 
+      if (offset = artifact.offset) && offset < 0
+        errors << ValidationError.new(
+          "artifact offset must be >= 0, got #{offset}",
+          "#{path}.offset"
+        )
+      end
+
       # -1 is the schema default and means "this artifact has no parent".
       if pi = artifact.parent_index
         if pi < NO_INDEX

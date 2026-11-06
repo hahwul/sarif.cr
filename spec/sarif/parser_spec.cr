@@ -342,7 +342,7 @@ describe "Sarif.parse with null runs (§3.13.4)" do
   end
 
   it "still rejects a missing runs key" do
-    expect_raises(Sarif::Error, /Missing JSON attribute: runs/) do
+    expect_raises(Sarif::Error, /Missing JSON attribute: runs.*at line 1, column 1/m) do
       Sarif.parse(%({"version": "2.1.0"}))
     end
   end
@@ -354,7 +354,7 @@ describe "Sarif.parse with null runs (§3.13.4)" do
 end
 
 describe "Sarif.parse with a UTF-8 BOM (RFC 8259 §8.1)" do
-  json = "﻿" + %({"version": "2.1.0", "runs": []})
+  json = "\uFEFF" + %({"version": "2.1.0", "runs": []})
 
   it "ignores a leading BOM in a String" do
     Sarif.parse(json).runs!.should be_empty
@@ -363,6 +363,22 @@ describe "Sarif.parse with a UTF-8 BOM (RFC 8259 §8.1)" do
   it "ignores a leading BOM in an IO, streamed or size-capped" do
     Sarif.parse(IO::Memory.new(json)).runs!.should be_empty
     Sarif.parse(IO::Memory.new(json), max_size: 1024_i64).runs!.should be_empty
+  end
+
+  it "ignores a leading BOM in SarifLog.from_json" do
+    Sarif::SarifLog.from_json(json).runs!.should be_empty
+  end
+
+  it "ignores a BOM split across short reads (pipe)" do
+    reader, writer = IO.pipe
+    spawn do
+      writer.write(json.to_slice[0, 1])
+      writer.flush
+      Fiber.yield
+      writer.write(json.to_slice[1..])
+      writer.close
+    end
+    Sarif.parse(reader).runs!.should be_empty
   end
 
   it "ignores a leading BOM in a file" do
@@ -380,6 +396,6 @@ describe "Sarif.parse with a UTF-8 BOM (RFC 8259 §8.1)" do
   end
 
   it "still rejects a BOM that is not leading" do
-    expect_raises(Sarif::Error) { Sarif.parse(%( ﻿{"version": "2.1.0", "runs": []})) }
+    expect_raises(Sarif::Error) { Sarif.parse(%( \uFEFF{"version": "2.1.0", "runs": []})) }
   end
 end

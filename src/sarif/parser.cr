@@ -89,22 +89,7 @@ module Sarif
   end
 
   private def self.parse_json(input : String | IO) : SarifLog
-    SarifLog.from_json(skip_bom(input))
-  end
-
-  # RFC 8259 §8.1: parsers MAY ignore a leading UTF-8 byte order mark.
-  # Several real-world SARIF producers (and sarif-sdk fixtures) write one.
-  private def self.skip_bom(json : String) : String
-    json.lchop('\uFEFF')
-  end
-
-  # ponytail: relies on `IO#peek`; an IO that can't peek (returns nil) keeps
-  # its BOM and fails to parse. Buffer it first if that ever matters.
-  private def self.skip_bom(io : IO) : IO
-    if (head = io.peek) && head.size >= 3 && head[0] == 0xEF && head[1] == 0xBB && head[2] == 0xBF
-      io.skip(3)
-    end
-    io
+    SarifLog.from_json(input)
   end
 
   private def self.validate!(log : SarifLog) : SarifLog

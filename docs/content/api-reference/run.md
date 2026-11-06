@@ -4,7 +4,7 @@ description = "API reference for the Run class and run-level types."
 weight = 2
 +++
 
-A `Run` represents a single invocation of a single analysis tool. A `SarifLog` contains one or more runs.
+A `Run` represents a single invocation of a single analysis tool. A `SarifLog` contains zero or more runs, or `null` runs when the tool failed to start.
 
 ## Constructor
 

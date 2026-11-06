@@ -13,7 +13,8 @@
 
 ### Fixed
 
-- A leading UTF-8 byte order mark is ignored when parsing from a String, IO or file (RFC 8259 §8.1). Output never contains a BOM.
+- A leading UTF-8 byte order mark is ignored by `Sarif.parse`, `Sarif.from_file` and `SarifLog.from_json`, including IOs that deliver it across short reads (RFC 8259 §8.1). Output never contains a BOM.
+- `Validator` rejects a negative `artifact.offset` (schema `minimum: 0`).
 
 ## v0.2.0
 

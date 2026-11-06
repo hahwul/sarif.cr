@@ -2106,4 +2106,11 @@ describe Sarif::Validator do
     paths.should contain("$.runs[0].threadFlowLocations[0].location.physicalLocation.region.startLine")
     paths.should contain("$.runs[0].invocations[0].toolExecutionNotifications[0].locations[0].physicalLocation.region.startLine")
   end
+
+  it "rejects a negative artifact offset (schema minimum 0)" do
+    log = Sarif.parse(%({"version": "2.1.0", "runs": [{"tool": {"driver": {"name": "x"}},
+      "artifacts": [{"offset": -5}, {"offset": 0}]}]}))
+    result = Sarif::Validator.new.validate(log)
+    result.errors.map(&.path).should eq(["$.runs[0].artifacts[0].offset"])
+  end
 end
