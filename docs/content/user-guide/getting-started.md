@@ -85,7 +85,7 @@ A SARIF document has this structure:
 |-----------|----------|-------------|
 | `version` | Yes | SARIF version (always `"2.1.0"`) |
 | `$schema` | No | JSON schema URI |
-| `runs` | Yes | Array of analysis runs |
+| `runs` | Yes | Array of analysis runs, or `null` if the tool failed to start |
 
 Each **Run** contains:
 

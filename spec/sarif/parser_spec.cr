@@ -17,8 +17,8 @@ describe "Sarif.parse" do
     })
     log = Sarif.parse(json)
     log.version.should eq("2.1.0")
-    log.runs.size.should eq(1)
-    log.runs[0].tool.driver.name.should eq("TestTool")
+    log.runs!.size.should eq(1)
+    log.runs![0].tool.driver.name.should eq("TestTool")
   end
 
   it "parses SARIF with results" do
@@ -40,7 +40,7 @@ describe "Sarif.parse" do
       }]
     })
     log = Sarif.parse(json)
-    result = log.runs[0].results.not_nil![0]
+    result = log.runs![0].results.not_nil![0]
     result.rule_id.should eq("R001")
     result.level.should eq(Sarif::Level::Error)
     result.locations.not_nil![0].physical_location.not_nil!
@@ -59,9 +59,9 @@ describe "Sarif.parse" do
       }]
     })
     log = Sarif.parse(json)
-    log.runs[0].tool.driver.information_uri.should eq("https://example.com")
-    log.runs[0].column_kind.should eq(Sarif::ColumnKind::Utf16CodeUnits)
-    log.runs[0].default_encoding.should eq("utf-8")
+    log.runs![0].tool.driver.information_uri.should eq("https://example.com")
+    log.runs![0].column_kind.should eq(Sarif::ColumnKind::Utf16CodeUnits)
+    log.runs![0].default_encoding.should eq("utf-8")
   end
 end
 
@@ -107,7 +107,7 @@ describe "Sarif.parse!" do
       }]
     })
     log = Sarif.parse!(json)
-    log.runs[0].tool.driver.name.should eq("ValidTool")
+    log.runs![0].tool.driver.name.should eq("ValidTool")
   end
 
   it "raises for empty tool name" do
@@ -149,7 +149,7 @@ describe "Sarif.parse with IO" do
     })
     io = IO::Memory.new(json)
     log = Sarif.parse(io)
-    log.runs[0].tool.driver.name.should eq("IOTool")
+    log.runs![0].tool.driver.name.should eq("IOTool")
   end
 end
 
@@ -166,7 +166,7 @@ describe "Sarif.from_file" do
     end
     begin
       log = Sarif.from_file(tmp.path)
-      log.runs[0].tool.driver.name.should eq("FileTool")
+      log.runs![0].tool.driver.name.should eq("FileTool")
     ensure
       tmp.delete
     end
@@ -182,7 +182,7 @@ describe "Sarif.parse with max_size" do
       }]
     })
     log = Sarif.parse(json, max_size: 1024_i64)
-    log.runs[0].tool.driver.name.should eq("Tool")
+    log.runs![0].tool.driver.name.should eq("Tool")
   end
 
   it "rejects input exceeding size limit" do
@@ -240,7 +240,7 @@ describe "Sarif.parse with max_size" do
     # The constant is meant to be opt-in: a caller passing it should still
     # be able to parse legitimate SARIF that's well under the cap.
     log = Sarif.parse(json, max_size: Sarif::DEFAULT_MAX_SIZE)
-    log.runs[0].tool.driver.name.should eq("Tool")
+    log.runs![0].tool.driver.name.should eq("Tool")
   end
 end
 
@@ -320,5 +320,82 @@ describe "Sarif::Validator with array limits" do
     )
     result = Sarif::Validator.new(max_runs: 5, max_results: 10).validate(log)
     result.valid?.should be_true
+  end
+end
+
+describe "Sarif.parse with null runs (§3.13.4)" do
+  null_runs = %({"version": "2.1.0", "runs": null})
+
+  it "accepts runs: null and round-trips it as an explicit null" do
+    log = Sarif.parse(null_runs)
+    log.runs.should be_nil
+    log.all_results.should be_empty
+    log.result_counts_by_level.should be_empty
+    log.valid?.should be_true
+    Sarif::Validator.new(max_runs: 1).validate(log).valid?.should be_true
+    JSON.parse(log.to_json).as_h["runs"].raw.should be_nil
+    Sarif.parse!(log.to_json).runs.should be_nil
+  end
+
+  it "always emits the schema-required runs key for a programmatic nil" do
+    JSON.parse(Sarif::SarifLog.new(runs: nil).to_json).as_h.has_key?("runs").should be_true
+  end
+
+  it "still rejects a missing runs key" do
+    expect_raises(Sarif::Error, /Missing JSON attribute: runs.*at line 1, column 1/m) do
+      Sarif.parse(%({"version": "2.1.0"}))
+    end
+  end
+
+  it "runs! raises Sarif::Error on null and returns the array otherwise" do
+    expect_raises(Sarif::Error, /null/) { Sarif.parse(null_runs).runs! }
+    Sarif.parse(%({"version": "2.1.0", "runs": []})).runs!.should be_empty
+  end
+end
+
+describe "Sarif.parse with a UTF-8 BOM (RFC 8259 §8.1)" do
+  json = "\uFEFF" + %({"version": "2.1.0", "runs": []})
+
+  it "ignores a leading BOM in a String" do
+    Sarif.parse(json).runs!.should be_empty
+  end
+
+  it "ignores a leading BOM in an IO, streamed or size-capped" do
+    Sarif.parse(IO::Memory.new(json)).runs!.should be_empty
+    Sarif.parse(IO::Memory.new(json), max_size: 1024_i64).runs!.should be_empty
+  end
+
+  it "ignores a leading BOM in SarifLog.from_json" do
+    Sarif::SarifLog.from_json(json).runs!.should be_empty
+  end
+
+  it "ignores a BOM split across short reads (pipe)" do
+    reader, writer = IO.pipe
+    spawn do
+      writer.write(json.to_slice[0, 1])
+      writer.flush
+      Fiber.yield
+      writer.write(json.to_slice[1..])
+      writer.close
+    end
+    Sarif.parse(reader).runs!.should be_empty
+  end
+
+  it "ignores a leading BOM in a file" do
+    path = File.tempname("bom", ".sarif")
+    File.write(path, json)
+    begin
+      Sarif.from_file(path).runs!.should be_empty
+    ensure
+      File.delete(path)
+    end
+  end
+
+  it "never emits a BOM" do
+    Sarif.parse(json).to_json.starts_with?('{').should be_true
+  end
+
+  it "still rejects a BOM that is not leading" do
+    expect_raises(Sarif::Error) { Sarif.parse(%( \uFEFF{"version": "2.1.0", "runs": []})) }
   end
 end

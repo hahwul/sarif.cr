@@ -163,4 +163,11 @@ describe Sarif::ArtifactChange do
     restored.artifact_location.uri.should eq("test.cr")
     restored.replacements[0].inserted_content.not_nil!.text.should eq("replaced")
   end
+
+  it "round-trips offset and length beyond Int32 (files > 2 GiB)" do
+    big = 5_000_000_000_i64
+    artifact = Sarif::Artifact.from_json(%({"offset": #{big}, "length": #{big}}))
+    artifact.offset.should eq(big)
+    JSON.parse(artifact.to_json)["offset"].as_i64.should eq(big)
+  end
 end

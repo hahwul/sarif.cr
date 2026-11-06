@@ -167,7 +167,7 @@ describe "Sarif Enums" do
 
     it "does not raise on an unknown level/kind and yields a parseable log" do
       log = Sarif::SarifLog.from_json(doc)
-      result = log.runs.first.results.not_nil!.first
+      result = log.runs!.first.results.not_nil!.first
       result.level.should eq(Sarif::Level::Unknown)
       result.kind.should eq(Sarif::ResultKind::Unknown)
       result.baseline_state.should eq(Sarif::BaselineState::Unknown)
@@ -175,7 +175,7 @@ describe "Sarif Enums" do
 
     it "is reachable through Sarif.parse without raising" do
       log = Sarif.parse(doc)
-      log.runs.first.results.not_nil!.first.level.should eq(Sarif::Level::Unknown)
+      log.runs!.first.results.not_nil!.first.level.should eq(Sarif::Level::Unknown)
     end
 
     it "re-serializes the sentinel as \"unknown\" without crashing" do

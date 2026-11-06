@@ -47,7 +47,7 @@ sarif_json = <<-JSON
 puts "--- parse ---"
 log = Sarif.parse(sarif_json)
 puts "  version : #{log.version}"
-puts "  results : #{log.runs.first.results.try(&.size) || 0}"
+puts "  results : #{log.runs!.first.results.try(&.size) || 0}"
 
 puts "\n--- validate ---"
 validator = Sarif::Validator.new

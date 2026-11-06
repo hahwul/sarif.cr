@@ -40,10 +40,10 @@ end
 puts "--- Built SARIF log ---"
 puts "Schema     : #{log.schema}"
 puts "Version    : #{log.version}"
-puts "Runs       : #{log.runs.size}"
-puts "Tool       : #{log.runs.first.tool.driver.name} v#{log.runs.first.tool.driver.version}"
-puts "Rules      : #{log.runs.first.tool.driver.rules.try(&.size) || 0}"
-puts "Results    : #{log.runs.first.results.try(&.size) || 0}"
+puts "Runs       : #{log.runs!.size}"
+puts "Tool       : #{log.runs!.first.tool.driver.name} v#{log.runs!.first.tool.driver.version}"
+puts "Rules      : #{log.runs!.first.tool.driver.rules.try(&.size) || 0}"
+puts "Results    : #{log.runs!.first.results.try(&.size) || 0}"
 
 puts "\n--- Pretty JSON (head) ---"
 puts log.to_pretty_json.lines.first(20).join("\n")

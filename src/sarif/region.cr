@@ -17,16 +17,16 @@ module Sarif
     property end_column : Int32? = nil
 
     @[JSON::Field(key: "byteOffset")]
-    property byte_offset : Int32? = nil
+    property byte_offset : Int64? = nil
 
     @[JSON::Field(key: "byteLength")]
-    property byte_length : Int32? = nil
+    property byte_length : Int64? = nil
 
     @[JSON::Field(key: "charOffset")]
-    property char_offset : Int32? = nil
+    property char_offset : Int64? = nil
 
     @[JSON::Field(key: "charLength")]
-    property char_length : Int32? = nil
+    property char_length : Int64? = nil
 
     property snippet : ArtifactContent? = nil
 
@@ -40,8 +40,8 @@ module Sarif
 
     def initialize(@start_line : Int32? = nil, @start_column : Int32? = nil,
                    @end_line : Int32? = nil, @end_column : Int32? = nil,
-                   @byte_offset : Int32? = nil, @byte_length : Int32? = nil,
-                   @char_offset : Int32? = nil, @char_length : Int32? = nil,
+                   @byte_offset : Int64? = nil, @byte_length : Int64? = nil,
+                   @char_offset : Int64? = nil, @char_length : Int64? = nil,
                    @snippet : ArtifactContent? = nil, @message : Message? = nil,
                    @source_language : String? = nil, @properties : PropertyBag? = nil)
     end

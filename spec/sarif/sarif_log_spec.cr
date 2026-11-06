@@ -11,7 +11,7 @@ describe Sarif::SarifLog do
     )
     log.version.should eq("2.1.0")
     log.schema.should eq(Sarif::SARIF_SCHEMA)
-    log.runs.size.should eq(1)
+    log.runs!.size.should eq(1)
   end
 
   it "serializes to valid JSON with $schema" do
@@ -61,11 +61,11 @@ describe Sarif::SarifLog do
     json = log.to_json
     restored = Sarif::SarifLog.from_json(json)
     restored.version.should eq("2.1.0")
-    restored.runs.size.should eq(1)
-    restored.runs[0].tool.driver.name.should eq("Analyzer")
-    restored.runs[0].tool.driver.rules.not_nil![0].id.should eq("R001")
-    restored.runs[0].results.not_nil![0].message.text.should eq("Found issue")
-    restored.runs[0].results.not_nil![0].locations.not_nil![0]
+    restored.runs!.size.should eq(1)
+    restored.runs![0].tool.driver.name.should eq("Analyzer")
+    restored.runs![0].tool.driver.rules.not_nil![0].id.should eq("R001")
+    restored.runs![0].results.not_nil![0].message.text.should eq("Found issue")
+    restored.runs![0].results.not_nil![0].locations.not_nil![0]
       .physical_location.not_nil!.region.not_nil!.start_line.should eq(42)
   end
 
@@ -145,11 +145,11 @@ describe Sarif::SarifLog do
         Sarif::Run.new(tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool2"))),
       ]
     )
-    log.runs.size.should eq(2)
+    log.runs!.size.should eq(2)
     json = log.to_json
     restored = Sarif::SarifLog.from_json(json)
-    restored.runs[0].tool.driver.name.should eq("Tool1")
-    restored.runs[1].tool.driver.name.should eq("Tool2")
+    restored.runs![0].tool.driver.name.should eq("Tool1")
+    restored.runs![1].tool.driver.name.should eq("Tool2")
   end
 
   describe "#find_results" do

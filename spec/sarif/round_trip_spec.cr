@@ -138,9 +138,9 @@ describe "SARIF Round-Trip" do
 
     # Verify top-level
     restored.version.should eq("2.1.0")
-    restored.runs.size.should eq(1)
+    restored.runs!.size.should eq(1)
 
-    run = restored.runs[0]
+    run = restored.runs![0]
 
     # Tool
     run.tool.driver.name.should eq("SecurityScanner")
@@ -211,11 +211,11 @@ describe "SARIF Round-Trip" do
     restored = Sarif::SarifLog.from_json(json)
 
     restored.version.should eq("2.1.0")
-    restored.runs[0].tool.driver.name.should eq("CrystalLint")
-    restored.runs[0].tool.driver.rules.not_nil!.size.should eq(2)
-    restored.runs[0].results.not_nil!.size.should eq(2)
-    restored.runs[0].artifacts.not_nil!.size.should eq(2)
-    restored.runs[0].invocations.not_nil!.size.should eq(1)
+    restored.runs![0].tool.driver.name.should eq("CrystalLint")
+    restored.runs![0].tool.driver.rules.not_nil!.size.should eq(2)
+    restored.runs![0].results.not_nil!.size.should eq(2)
+    restored.runs![0].artifacts.not_nil!.size.should eq(2)
+    restored.runs![0].invocations.not_nil!.size.should eq(1)
 
     # Re-serialize
     json2 = restored.to_json
@@ -258,12 +258,12 @@ describe "SARIF Round-Trip" do
     })
 
     log = Sarif.parse(json)
-    log.runs[0].tool.driver.name.should eq("ESLint")
-    log.runs[0].results.not_nil![0].rule_id.should eq("no-unused-vars")
+    log.runs![0].tool.driver.name.should eq("ESLint")
+    log.runs![0].results.not_nil![0].rule_id.should eq("no-unused-vars")
 
     json2 = log.to_json
     restored = Sarif::SarifLog.from_json(json2)
-    restored.runs[0].tool.driver.name.should eq("ESLint")
-    restored.runs[0].results.not_nil![0].level.should eq(Sarif::Level::Error)
+    restored.runs![0].tool.driver.name.should eq("ESLint")
+    restored.runs![0].results.not_nil![0].level.should eq(Sarif::Level::Error)
   end
 end
