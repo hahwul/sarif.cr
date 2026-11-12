@@ -179,6 +179,10 @@ module Sarif
       if config = descriptor.default_configuration
         validate_reporting_configuration(config, "#{path}.defaultConfiguration", errors)
       end
+
+      descriptor.relationships.try &.each_with_index do |relationship, i|
+        validate_descriptor_reference(relationship.target, "#{path}.relationships[#{i}].target", errors)
+      end
     end
 
     private def validate_result(result : Result, run : Run, path : String,
@@ -198,7 +202,9 @@ module Sarif
       validate_enum(result.kind, "#{path}.kind", errors)
 
       # §3.27.10: when kind is anything but "fail", level SHALL be "none".
-      if (kind = result.kind) && kind != ResultKind::Fail && (level = result.level) && level != Level::None
+      # Values outside the vocabulary are reported by `validate_enum` above.
+      kind, level = result.kind, result.level
+      if kind && level && !kind.fail? && !kind.unknown? && !level.none? && !level.unknown?
         errors << ValidationError.new(
           "level must be 'none' when kind is '#{kind.to_s_sarif}', got '#{level.to_s_sarif}'",
           "#{path}.level"
@@ -283,21 +289,31 @@ module Sarif
     private def validate_result_rule(result : Result, run : Run, path : String,
                                      errors : Array(ValidationError))
       reference = result.rule
-      validate_descriptor_reference(reference, "#{path}.rule", errors) if reference
-      rules = run.tool_component_for(reference.try(&.tool_component)).try(&.rules)
+      if reference
+        # `ruleId` / `ruleIndex` supply `rule.id` / `rule.index` by default, so
+        # a `rule` that only names its toolComponent is still identified.
+        identified = !result.rule_id.nil? || !result.rule_index.nil?
+        validate_descriptor_reference(reference, "#{path}.rule", errors, identified: identified)
+      end
 
-      # `rule.index` defaults to `ruleIndex` and `rule.id` to `ruleId`
-      # (§3.27.7, §3.52.4, §3.52.5), so the lookup runs on whichever is given.
+      component_reference = reference.try(&.tool_component)
+      component = run.tool_component_for(component_reference)
+      unless component
+        errors << ValidationError.new(
+          "rule.toolComponent does not identify a tool component of this run",
+          "#{path}.rule.toolComponent"
+        )
+        return
+      end
+      rules = component.rules
+
+      # `rule.index` defaults to `ruleIndex` (§3.27.7, §3.52.5), so the lookup
+      # runs on whichever is given.
       index_label, rule_index = if idx = result.rule_index
                                   {"ruleIndex", idx}
                                 else
                                   {"rule.index", reference.try(&.index)}
                                 end
-      id_label, rule_id = if ref_id = reference.try(&.id)
-                            {"rule.id", ref_id}
-                          else
-                            {"ruleId", result.rule_id}
-                          end
 
       # A negative `rule.index` is reported by `validate_descriptor_reference`.
       validate_min(result.rule_index, NO_INDEX, "#{path}.ruleIndex", "ruleIndex", errors)
@@ -305,7 +321,9 @@ module Sarif
       if rule_index && rule_index >= 0
         if rules && rule_index < rules.size
           descriptor = rules[rule_index]
-          if rule_id && !descriptor.matches_id?(rule_id)
+          # Both ids have to identify the descriptor (§3.27.5, §3.52.4).
+          {"ruleId" => result.rule_id, "rule.id" => reference.try(&.id)}.each do |id_label, rule_id|
+            next if rule_id.nil? || descriptor.matches_id?(rule_id)
             errors << ValidationError.new(
               "#{id_label} '#{rule_id}' does not match rule at #{index_label} #{rule_index} ('#{descriptor.id}')",
               "#{path}.#{id_label}"
@@ -340,8 +358,8 @@ module Sarif
     # it SHALL carry at least one of index, guid and id, and its index and
     # toolComponent are subject to the usual -1 sentinel and GUID rules.
     private def validate_descriptor_reference(reference : ReportingDescriptorReference, path : String,
-                                              errors : Array(ValidationError))
-      if reference.index.nil? && reference.guid.nil? && reference.id.nil?
+                                              errors : Array(ValidationError), *, identified : Bool = false)
+      if !identified && reference.index.nil? && reference.guid.nil? && reference.id.nil?
         errors << ValidationError.new(
           "reportingDescriptorReference must have at least one of index, guid or id",
           path

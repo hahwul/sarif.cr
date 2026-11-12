@@ -97,7 +97,7 @@ The validator checks for:
 - **Result message** -- Must have either `text` or `id`
 - **Rule index** -- `ruleIndex` (or `rule.index`) must reference a valid rule in the tool component named by `rule.toolComponent` (the driver by default)
 - **Rule ID consistency** -- `ruleId` (or `rule.id`) must match the rule at that index
-- **Descriptor references** -- `rule`, `taxa`, notification `descriptor`/`associatedRule` and configuration override `descriptor` must carry at least one of `index`, `guid` or `id`
+- **Descriptor references** -- `rule`, `taxa`, notification `descriptor`/`associatedRule`, configuration override `descriptor` and rule relationship `target` must carry at least one of `index`, `guid` or `id`
 - **Kind and level** -- `level` must be `none` when `kind` is not `fail`
 - **GUID format** -- Must be an RFC 4122 UUID (version 1-5, variant `8`/`9`/`a`/`b`), as in the official schema
 - **Timestamp format** -- Must be RFC 3339

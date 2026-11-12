@@ -2170,6 +2170,38 @@ describe Sarif::Validator do
       ])
     end
 
+    it "accepts a rule that only names its toolComponent when ruleId or ruleIndex identify it" do
+      json = %({"version": "2.1.0", "runs": [{"tool": {"driver": {"name": "x"},
+        "extensions": [{"name": "ext", "rules": [{"id": "E0"}]}]},
+        "results": [{"ruleId": "E0", "ruleIndex": 0, "rule": {"toolComponent": {"index": 0}}, "message": {"text": "m"}}]}]})
+      Sarif::Validator.new.validate(Sarif.parse(json)).errors.should be_empty
+    end
+
+    it "rejects a rule.toolComponent that resolves to nothing" do
+      errors = validate.call(%({"rule": {"id": "R", "index": 0, "toolComponent": {"index": 5}}, "message": {"text": "m"}}), "")
+      errors.map(&.[0]).should eq(["$.runs[0].results[0].rule.toolComponent"])
+    end
+
+    it "checks ruleId against the descriptor even when rule.id is present" do
+      errors = validate.call(%({"ruleId": "zzz", "ruleIndex": 0, "rule": {"id": "abc/def"}, "message": {"text": "m"}}), "")
+      errors.map(&.[0]).should eq(["$.runs[0].results[0].ruleId", "$.runs[0].results[0].rule.id"])
+    end
+
+    it "does not add a kind/level error for values outside the vocabulary" do
+      results = %({"kind": "review2", "level": "warning", "message": {"text": "m"}}, {"kind": "pass", "level": "fatal", "message": {"text": "m"}})
+      validate.call(results, "").map(&.[0]).should eq(["$.runs[0].results[0].kind", "$.runs[0].results[1].level"])
+    end
+
+    it "checks reportingDescriptor relationship targets" do
+      json = %({"version": "2.1.0", "runs": [{"tool": {"driver": {"name": "x",
+        "rules": [{"id": "R", "relationships": [{"target": {}}, {"target": {"guid": "bad"}}]}]}}}]})
+      paths = Sarif::Validator.new.validate(Sarif.parse(json)).errors.map(&.path)
+      paths.should eq([
+        "$.runs[0].tool.driver.rules[0].relationships[0].target",
+        "$.runs[0].tool.driver.rules[0].relationships[1].target.guid",
+      ])
+    end
+
     it "requires level none when kind is not fail (§3.27.10)" do
       results = [
         %({"kind": "pass", "level": "error", "message": {"text": "m"}}),
