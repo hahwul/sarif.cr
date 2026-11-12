@@ -1,3 +1,4 @@
+require "file_utils"
 require "../spec_helper"
 
 describe "Sarif.parse" do
@@ -173,6 +174,20 @@ describe "Sarif.from_file" do
   end
 end
 
+class EndlessIO < IO
+  getter bytes_read = 0_i64
+
+  def read(slice : Bytes) : Int32
+    slice.fill(' '.ord.to_u8)
+    @bytes_read += slice.size
+    slice.size
+  end
+
+  def write(slice : Bytes) : Nil
+    raise IO::Error.new("read-only")
+  end
+end
+
 describe "Sarif.parse with max_size" do
   it "accepts input within size limit" do
     json = %({
@@ -207,6 +222,43 @@ describe "Sarif.parse with max_size" do
     io = IO::Memory.new(json)
     expect_raises(Sarif::Error, /exceeds maximum allowed size/) do
       Sarif.parse(io, max_size: 10_i64)
+    end
+  end
+
+  it "stops reading an IO once it passes max_size" do
+    # An endless producer: the cap must bound what is read, not just what is
+    # parsed, or `max_size` cannot protect against a hostile stream.
+    io = EndlessIO.new
+    expect_raises(Sarif::Error, /exceeds maximum allowed size/) do
+      Sarif.parse(io, max_size: 1024_i64)
+    end
+    io.bytes_read.should be <= 1024 + 8192
+  end
+
+  it "rejects an out-of-range IO cap as Sarif::Error like the String overload" do
+    json = %({"version": "2.1.0", "runs": []})
+    Sarif.parse(IO::Memory.new(json), max_size: Int64::MAX).runs!.should be_empty
+    expect_raises(Sarif::Error, /exceeds maximum allowed size/) do
+      Sarif.parse(IO::Memory.new(json), max_size: -5_i64)
+    end
+  end
+
+  it "caps a non-regular file (FIFO) by bytes read, not by File.size" do
+    dir = File.tempname("sarif-fifo")
+    Dir.mkdir(dir)
+    fifo = File.join(dir, "in.sarif")
+    Process.run("mkfifo", [fifo]).success?.should be_true
+    # A separate writer process, so a blocking FIFO open cannot deadlock this
+    # thread. It gets SIGPIPE once the reader stops at the cap.
+    script = %(printf '{"version": "2.1.0", "runs": []'; head -c 4096 /dev/zero | tr '\\0' ' '; printf '}')
+    writer = Process.new("sh", ["-c", "(#{script}) > #{Process.quote(fifo)}"])
+    begin
+      expect_raises(Sarif::Error, /exceeds maximum allowed size/) do
+        Sarif.from_file(fifo, max_size: 100_i64)
+      end
+    ensure
+      writer.wait
+      FileUtils.rm_rf(dir)
     end
   end
 

@@ -143,6 +143,40 @@ describe "Sarif Enums" do
       end
       Sarif.strict_enums.should be_false
     end
+
+    it "with_strict_enums is scoped to the calling fiber" do
+      inside = Channel(Nil).new
+      release = Channel(Nil).new
+      spawn do
+        Sarif.with_strict_enums do
+          inside.send(nil)
+          release.receive # parked inside the block, e.g. waiting on IO
+        end
+      end
+      inside.receive
+      begin
+        Sarif.strict_enums.should be_false
+        Sarif::Level.parse_sarif("nope").should eq(Sarif::Level::Unknown)
+      ensure
+        release.send(nil)
+      end
+    end
+
+    it "with_strict_enums restores correctly when fibers interleave" do
+      a_in = Channel(Nil).new
+      b_in = Channel(Nil).new
+      a_out = Channel(Nil).new
+      b_out = Channel(Nil).new
+      done = Channel(Bool).new
+      spawn { Sarif.with_strict_enums { a_in.send(nil); a_out.receive } }
+      spawn { Sarif.with_strict_enums { b_in.send(nil); b_out.receive; done.send(Sarif.strict_enums) } }
+      a_in.receive
+      b_in.receive
+      a_out.send(nil) # A leaves first, while B is still inside its block
+      b_out.send(nil)
+      done.receive.should be_true
+      Sarif.strict_enums.should be_false
+    end
   end
 
   describe "tolerant full-document parsing" do

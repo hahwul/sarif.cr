@@ -2316,4 +2316,54 @@ describe Sarif::Validator do
       argument_errors.call(wrap.call(%({"message":{"text":"m"},"graphs":[{"nodes":[{"id":"n","label":{"text":"{1}"}}]}]}), "")).should eq(["$.runs[0].results[0].graphs[0].nodes[0].label.arguments"])
     end
   end
+
+  describe "originalUriBaseIds (SARIF 2.1.0 §3.14.14)" do
+    errors_for = ->(base_ids : String) do
+      json = %({"version": "2.1.0", "runs": [{"tool": {"driver": {"name": "x"}}, "results": [],
+        "originalUriBaseIds": {#{base_ids}}}]})
+      Sarif::Validator.new.validate(Sarif.parse(json)).errors.map(&.path)
+    end
+
+    it "accepts the §3.14.14 examples" do
+      errors_for.call(%("PROJECTROOT": {"uri": "file:///C:/Users/Mary/code/TheProject/"},
+        "SRCROOT": {"uri": "src/", "uriBaseId": "PROJECTROOT"})).should be_empty
+      # A post-processor may drop the absolute uri and keep the description.
+      errors_for.call(%("PROJECTROOT": {"description": {"text": "root"}},
+        "SRCROOT": {"uri": "src/", "uriBaseId": "PROJECTROOT"})).should be_empty
+      # The base may be supplied by the consumer instead (§3.4.4 step 1).
+      errors_for.call(%("SRCROOT": {"uri": "src/", "uriBaseId": "ELSEWHERE"})).should be_empty
+    end
+
+    it "requires uriBaseId exactly when uri is relative" do
+      errors_for.call(%("A": {"uri": "repository/"})).should eq(["$.runs[0].originalUriBaseIds.A"])
+      errors_for.call(%("A": {"uri": "file:///C:/rules/", "uriBaseId": "B"}, "B": {"uri": "file:///x/"})).should eq(["$.runs[0].originalUriBaseIds.A"])
+      errors_for.call(%("A": {"uriBaseId": "B"}, "B": {"uri": "file:///x/"})).should eq(["$.runs[0].originalUriBaseIds.A"])
+    end
+
+    it "requires a trailing slash and forbids query, fragment and '..' segments" do
+      errors_for.call(%("A": {"uri": "file:///C:/src"})).should eq(["$.runs[0].originalUriBaseIds.A.uri"])
+      errors_for.call(%("A": {"uri": "http://www.contoso.com/catalog/?date=today/"})).should eq(["$.runs[0].originalUriBaseIds.A.uri"])
+      errors_for.call(%("A": {"uri": "http://www.contoso.com/index.htm#search/"})).should eq(["$.runs[0].originalUriBaseIds.A.uri"])
+      errors_for.call(%("A": {"uri": "file:///C:/rules/dir1/dir2/../"})).should eq(["$.runs[0].originalUriBaseIds.A.uri"])
+      errors_for.call(%("A": {"uri": "file:///C:/rules/dir1/%2E%2e/"})).should eq(["$.runs[0].originalUriBaseIds.A.uri"])
+      errors_for.call(%("A": {"uri": "file:///C:/rules/..a/b../"})).should be_empty
+    end
+
+    it "reports each entry of a uriBaseId loop, not the entries leading into it" do
+      errors_for.call(%("A": {"uri": "a/", "uriBaseId": "A"})).should eq(["$.runs[0].originalUriBaseIds.A.uriBaseId"])
+      errors_for.call(%("A": {"uri": "a/", "uriBaseId": "B"}, "B": {"uri": "b/", "uriBaseId": "A"},
+        "C": {"uri": "c/", "uriBaseId": "A"})).should eq(["$.runs[0].originalUriBaseIds.A.uriBaseId", "$.runs[0].originalUriBaseIds.B.uriBaseId"])
+    end
+
+    it "stays linear on a long uriBaseId chain" do
+      n = 20_000
+      chain = (0...n).map { |i| %("B#{i}": {"uri": "d/", "uriBaseId": "B#{(i + 1) % n}"}) }.join(",")
+      elapsed = Time.measure { errors_for.call(chain).size.should eq(n) }
+      elapsed.should be < 2.seconds
+    end
+
+    it "checks the arguments of an entry's description" do
+      errors_for.call(%("A": {"uri": "file:///x/", "description": {"text": "{3}"}})).should eq(["$.runs[0].originalUriBaseIds.A.description.arguments"])
+    end
+  end
 end

@@ -111,6 +111,7 @@ The validator checks for:
 - **Artifact change** -- Must have at least one replacement
 - **Artifact length** -- Must be >= -1
 - **Index-like values** -- `location.id`, thread flow location `index`/`executionOrder` must be >= -1; `nestingLevel` and relationship `target` must be >= 0
+- **originalUriBaseIds** -- A relative `uri` needs a `uriBaseId` and an absolute one must not have one; each `uri` ends with `/` and has no query, fragment or `..` segment; `uriBaseId` chains must not loop (§3.14.14)
 - **Invocation time** -- `endTimeUtc` must be >= `startTimeUtc`
 - **Nesting depth** -- Must not exceed `max_depth`
 

@@ -248,6 +248,23 @@ describe Sarif::SarifLog do
       )
       log.find_locations_in_file("src/nonexistent.cr").should be_empty
     end
+
+    it "matches an artifactLocation that names its file only through index (§3.4.2)" do
+      log = Sarif.parse(%({"version": "2.1.0", "runs": [
+        {"tool": {"driver": {"name": "A"}},
+         "artifacts": [{"location": {"uri": "src/main.cr"}}, {"location": {"uri": "src/other.cr"}}],
+         "results": [
+           {"message": {"text": "by index"}, "locations": [{"physicalLocation": {"artifactLocation": {"index": 0}, "region": {"startLine": 1}}}]},
+           {"message": {"text": "other"}, "locations": [{"physicalLocation": {"artifactLocation": {"index": 1}}}]},
+           {"message": {"text": "dangling"}, "locations": [{"physicalLocation": {"artifactLocation": {"index": 9}}}]}]},
+        {"tool": {"driver": {"name": "B"}},
+         "artifacts": [{"location": {"uri": "src/other.cr"}}],
+         "results": [{"message": {"text": "index into its own run"}, "locations": [{"physicalLocation": {"artifactLocation": {"index": 0}}}]}]}]}))
+      locs = log.find_locations_in_file("src/main.cr")
+      locs.size.should eq(1)
+      locs[0].physical_location.not_nil!.region.not_nil!.start_line.should eq(1)
+      log.find_locations_in_file("src/other.cr").size.should eq(2)
+    end
   end
 
   describe "#result_counts_by_level" do

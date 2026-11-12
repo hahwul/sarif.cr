@@ -1,3 +1,10 @@
+class Fiber
+  # :nodoc:
+  # Per-fiber `Sarif.with_strict_enums` override (same pattern as the stdlib's
+  # `Fiber#logging_context`).
+  property sarif_strict_enums : Bool? = nil
+end
+
 module Sarif
   # The sentinel string that the `Unknown` member of every `sarif_enum`
   # serializes to. No real SARIF 2.1.0 enum value uses this token, so it is
@@ -16,11 +23,14 @@ module Sarif
   # vendor extensions) routinely emit values this library does not know about;
   # the tolerant default keeps the rest of the log parseable.
   #
+  # The setter changes the process-wide default. Inside a `with_strict_enums`
+  # block the getter returns `true` for the calling fiber only.
+  #
   # ```
   # Sarif.strict_enums = true # opt into strict (raising) deserialization
   # ```
   def self.strict_enums : Bool
-    @@strict_enums
+    Fiber.current.sarif_strict_enums || @@strict_enums
   end
 
   def self.strict_enums=(value : Bool) : Bool
@@ -29,13 +39,18 @@ module Sarif
 
   # Runs the given block with strict enum parsing enabled, restoring the
   # previous setting afterwards (even if the block raises).
+  #
+  # The setting is scoped to the calling fiber, so other fibers that parse
+  # while this block waits on IO keep their own mode. Fibers spawned inside
+  # the block do not inherit it.
   def self.with_strict_enums(& : -> T) : T forall T
-    previous = @@strict_enums
-    @@strict_enums = true
+    fiber = Fiber.current
+    previous = fiber.sarif_strict_enums
+    fiber.sarif_strict_enums = true
     begin
       yield
     ensure
-      @@strict_enums = previous
+      fiber.sarif_strict_enums = previous
     end
   end
 
