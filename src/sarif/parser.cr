@@ -28,12 +28,16 @@ module Sarif
   # Security: with the default `max_size: nil` the IO is consumed
   # straight into `SarifLog.from_json` with no byte cap; callers that
   # cannot trust the producer SHOULD pass `max_size: Sarif::DEFAULT_MAX_SIZE`
-  # so the IO is read into a buffer and rejected past the cap.
+  # so at most `max_size + 1` bytes are read into a buffer and the input is
+  # rejected past the cap.
   def self.parse(io : IO, *, max_size : Int64? = nil) : SarifLog
     if max_size
-      json = io.gets_to_end
-      check_size!(json.bytesize.to_i64, max_size, "Input")
-      parse_json(json)
+      # Read at most one byte past the cap, so an endless or oversized stream
+      # is rejected without being buffered whole.
+      buffer = IO::Memory.new
+      IO.copy(io, buffer, max_size + 1)
+      check_size!(buffer.size.to_i64, max_size, "Input")
+      parse_json(buffer.rewind)
     else
       parse_json(io)
     end

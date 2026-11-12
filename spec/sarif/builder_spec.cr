@@ -323,7 +323,10 @@ describe Sarif::Builder do
       b.run("EmptyTool") { }
     end
     run = log.runs![0]
-    run.results.should be_nil
+    # §3.14.23: a run that found nothing has `results: []`; absent means null,
+    # which says the tool failed to start or to begin its analysis.
+    run.results.should eq([] of Sarif::Result)
+    log.to_json.should contain(%("results":[]))
     run.artifacts.should be_nil
     run.invocations.should be_nil
     run.tool.driver.rules.should be_nil

@@ -159,7 +159,10 @@ module Sarif
       tool = Tool.new(driver: driver)
       Run.new(
         tool: tool,
-        results: Sarif.nil_if_empty(@results),
+        # Always present: `[]` when nothing was found (§3.14.23). An absent
+        # or null `results` means the tool failed to start or to begin its
+        # analysis.
+        results: @results,
         artifacts: Sarif.nil_if_empty(@artifacts),
         invocations: Sarif.nil_if_empty(@invocations),
         graphs: Sarif.nil_if_empty(@graphs),

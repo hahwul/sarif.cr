@@ -133,18 +133,26 @@ module Sarif
     end
 
     # Returns all locations that reference the given file URI across all results.
+    #
+    # An `artifactLocation` without a `uri` names its file through `index` into
+    # its run's `artifacts` (§3.4.2), so that artifact's `uri` is compared.
     def find_locations_in_file(uri : String) : Array(Location)
       locations = [] of Location
-      all_results.each do |result|
-        result.locations.try &.each do |loc|
-          if physical = loc.physical_location
-            if artifact_loc = physical.artifact_location
-              locations << loc if artifact_loc.uri == uri
-            end
+      runs.try &.each do |run|
+        run.results.try &.each do |result|
+          result.locations.try &.each do |loc|
+            next unless artifact_loc = loc.physical_location.try(&.artifact_location)
+            locations << loc if location_uri(run, artifact_loc) == uri
           end
         end
       end
       locations
+    end
+
+    private def location_uri(run : Run, artifact_loc : ArtifactLocation) : String?
+      artifact_loc.uri || artifact_loc.index.try do |idx|
+        run.artifacts.try(&.[idx]?).try(&.location).try(&.uri) if idx >= 0
+      end
     end
 
     # Returns a hash mapping each severity level to the count of results at that level.

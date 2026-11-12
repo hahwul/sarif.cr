@@ -16,6 +16,11 @@
 
 ### Fixed
 
+- `Builder` always emits `results` on a run, as `[]` when nothing was added (§3.14.23). It used to drop the empty array, and an absent `results` means null: "the tool failed to start". Callers that tested `run.results.nil?` to detect a clean run should test `empty?`.
+- `Sarif.parse(io, max_size:)` reads at most `max_size + 1` bytes. It used to read the whole IO before comparing it with the cap, so an endless or huge stream was buffered in full.
+- `Sarif.with_strict_enums` is scoped to the calling fiber. It used to flip the process-wide flag, so another fiber parsing while the block waited on IO also became strict, and interleaved blocks could restore the wrong value. `Sarif.strict_enums=` still sets the process-wide default.
+- `SarifLog#find_locations_in_file` matches an `artifactLocation` that names its file only through `index` into the run's `artifacts` (§3.4.2).
+- `Validator` checks `run.originalUriBaseIds` (§3.14.14): a relative `uri` needs a `uriBaseId`, an absolute or absent one must not have one, a `uri` ends with `/` and has no query, fragment or `..` segment, and `uriBaseId` chains must not loop.
 - `Validator` and the `valid?` helpers accept an explicit `rank: -1.0` on results and reporting configurations. The schema allows it (`minimum: -1.0`, the "unknown" default); other values outside 0.0-100.0 are still rejected.
 - `Validator` checks the message argument count (§3.11.11): a `{n}` placeholder needs at least n+1 `arguments`. The check covers `text`, `markdown`, and the string `message.id` looks up in the rule's (or notification descriptor's) `messageStrings` or the component's `globalMessageStrings` when it resolves. `{{`/`}}` are escapes (§3.11.5). Result and notification messages are checked, and so are the nested location, region, codeFlow, threadFlow, stack, fix, graph, node, edge, graphTraversal, attachment, artifact and automationDetails messages.
 - A leading UTF-8 byte order mark is ignored by `Sarif.parse`, `Sarif.from_file` and `SarifLog.from_json`, including IOs that deliver it across short reads (RFC 8259 §8.1). Output never contains a BOM.

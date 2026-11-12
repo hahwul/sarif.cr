@@ -173,6 +173,20 @@ describe "Sarif.from_file" do
   end
 end
 
+class EndlessIO < IO
+  getter bytes_read = 0_i64
+
+  def read(slice : Bytes) : Int32
+    slice.fill(' '.ord.to_u8)
+    @bytes_read += slice.size
+    slice.size
+  end
+
+  def write(slice : Bytes) : Nil
+    raise IO::Error.new("read-only")
+  end
+end
+
 describe "Sarif.parse with max_size" do
   it "accepts input within size limit" do
     json = %({
@@ -208,6 +222,16 @@ describe "Sarif.parse with max_size" do
     expect_raises(Sarif::Error, /exceeds maximum allowed size/) do
       Sarif.parse(io, max_size: 10_i64)
     end
+  end
+
+  it "stops reading an IO once it passes max_size" do
+    # An endless producer: the cap must bound what is read, not just what is
+    # parsed, or `max_size` cannot protect against a hostile stream.
+    io = EndlessIO.new
+    expect_raises(Sarif::Error, /exceeds maximum allowed size/) do
+      Sarif.parse(io, max_size: 1024_i64)
+    end
+    io.bytes_read.should be <= 1024 + 8192
   end
 
   it "rejects file exceeding size limit" do
