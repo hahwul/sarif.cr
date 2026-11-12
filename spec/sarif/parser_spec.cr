@@ -1,3 +1,4 @@
+require "file_utils"
 require "../spec_helper"
 
 describe "Sarif.parse" do
@@ -232,6 +233,33 @@ describe "Sarif.parse with max_size" do
       Sarif.parse(io, max_size: 1024_i64)
     end
     io.bytes_read.should be <= 1024 + 8192
+  end
+
+  it "rejects an out-of-range IO cap as Sarif::Error like the String overload" do
+    json = %({"version": "2.1.0", "runs": []})
+    Sarif.parse(IO::Memory.new(json), max_size: Int64::MAX).runs!.should be_empty
+    expect_raises(Sarif::Error, /exceeds maximum allowed size/) do
+      Sarif.parse(IO::Memory.new(json), max_size: -5_i64)
+    end
+  end
+
+  it "caps a non-regular file (FIFO) by bytes read, not by File.size" do
+    dir = File.tempname("sarif-fifo")
+    Dir.mkdir(dir)
+    fifo = File.join(dir, "in.sarif")
+    Process.run("mkfifo", [fifo]).success?.should be_true
+    # A separate writer process, so a blocking FIFO open cannot deadlock this
+    # thread. It gets SIGPIPE once the reader stops at the cap.
+    script = %(printf '{"version": "2.1.0", "runs": []'; head -c 4096 /dev/zero | tr '\\0' ' '; printf '}')
+    writer = Process.new("sh", ["-c", "(#{script}) > #{Process.quote(fifo)}"])
+    begin
+      expect_raises(Sarif::Error, /exceeds maximum allowed size/) do
+        Sarif.from_file(fifo, max_size: 100_i64)
+      end
+    ensure
+      writer.wait
+      FileUtils.rm_rf(dir)
+    end
   end
 
   it "rejects file exceeding size limit" do

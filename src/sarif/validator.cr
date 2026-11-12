@@ -891,8 +891,10 @@ module Sarif
     # no entry is not an error, since the consumer may supply it (§3.4.4).
     private def validate_original_uri_base_ids(base_ids : Hash(String, ArtifactLocation), path : String,
                                                errors : Array(ValidationError))
+      loops = uri_base_id_loops(base_ids)
       base_ids.each do |name, location|
         entry_path = "#{path}.#{name}"
+        validate_message_arguments(location.description, "#{entry_path}.description", errors)
         uri = location.uri
         absolute = uri && URI_PATTERN.matches?(uri)
         if uri && !absolute && location.uri_base_id.nil?
@@ -909,28 +911,37 @@ module Sarif
             errors << ValidationError.new("originalUriBaseIds uri '#{uri}' must not have a query or fragment", "#{entry_path}.uri")
           end
           # %2E is an encoded "." (RFC 3986 §2.3, §6.2.2.2).
-          if uri.split(/[?#]/, 2).first.split('/').any? { |seg| seg.gsub(/%2e/i, ".") == ".." }
+          if uri.split('/').any? { |seg| seg.gsub(/%2e/i, ".") == ".." }
             errors << ValidationError.new("originalUriBaseIds uri '#{uri}' must not contain '..' segments", "#{entry_path}.uri")
           end
         end
 
-        if uri_base_id_loop?(base_ids, name)
+        if loops.includes?(name)
           errors << ValidationError.new("uriBaseId chain starting at '#{name}' loops back to it", "#{entry_path}.uriBaseId")
         end
       end
     end
 
-    # Follows the §3.14.14 resolution procedure from `start`; true when it
-    # comes back to `start`. Entries on a chain that only leads into another
-    # entry's loop are not reported, the loop's own members are.
-    private def uri_base_id_loop?(base_ids : Hash(String, ArtifactLocation), start : String) : Bool
-      seen = Set{start}
-      current = base_ids[start]
-      while (base = current.uri_base_id) && !(current.uri.try { |u| URI_PATTERN.matches?(u) })
-        return true if base == start
-        return false unless seen.add?(base) && (current = base_ids[base]?)
+    # The entries whose §3.14.14 resolution procedure comes back to them.
+    # Entries on a chain that only leads into a loop are not members. Each
+    # entry is walked once, so a long chain stays linear.
+    private def uri_base_id_loops(base_ids : Hash(String, ArtifactLocation)) : Set(String)
+      loops = Set(String).new
+      done = Set(String).new
+      base_ids.each_key do |start|
+        walk = {} of String => Int32 # name => position in this walk
+        name = start
+        while name && !done.includes?(name) && (location = base_ids[name]?)
+          if position = walk[name]?
+            walk.each { |member, at| loops << member if at >= position }
+            break
+          end
+          walk[name] = walk.size
+          name = location.uri.try { |u| URI_PATTERN.matches?(u) } ? nil : location.uri_base_id
+        end
+        done.concat(walk.keys)
       end
-      false
+      loops
     end
 
     private def validate_graph_traversal(gt : GraphTraversal, path : String,

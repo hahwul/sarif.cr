@@ -31,16 +31,7 @@ module Sarif
   # so at most `max_size + 1` bytes are read into a buffer and the input is
   # rejected past the cap.
   def self.parse(io : IO, *, max_size : Int64? = nil) : SarifLog
-    if max_size
-      # Read at most one byte past the cap, so an endless or oversized stream
-      # is rejected without being buffered whole.
-      buffer = IO::Memory.new
-      IO.copy(io, buffer, max_size + 1)
-      check_size!(buffer.size.to_i64, max_size, "Input")
-      parse_json(buffer.rewind)
-    else
-      parse_json(io)
-    end
+    parse_json(max_size ? read_capped(io, max_size, "Input") : io)
   rescue ex : Sarif::Error
     raise ex
   rescue ex : JSON::ParseException | JSON::SerializableError
@@ -57,7 +48,11 @@ module Sarif
     if max_size
       check_size!(File.size(path).to_i64, max_size, "File")
     end
-    File.open(path) { |io| parse_json(io) }
+    File.open(path) do |io|
+      # A regular file is streamed once its size passed the check. A FIFO or
+      # device reports no meaningful size, so it is read under the cap.
+      parse_json(max_size && !io.info.file? ? read_capped(io, max_size, "File") : io)
+    end
   rescue File::NotFoundError
     raise Error.new("File not found: #{path}")
   rescue File::AccessDeniedError
@@ -90,6 +85,17 @@ module Sarif
     if limit && actual > limit
       raise Error.new("#{label} size #{actual} bytes exceeds maximum allowed size of #{limit} bytes")
     end
+  end
+
+  # Reads at most one byte past the cap, so an endless or oversized stream is
+  # rejected without being buffered whole.
+  private def self.read_capped(io : IO, max_size : Int64, label : String) : IO
+    buffer = IO::Memory.new
+    IO.copy(io, buffer, max_size.clamp(0_i64, Int64::MAX - 1) + 1)
+    if buffer.size > max_size
+      raise Error.new("#{label} exceeds maximum allowed size of #{max_size} bytes")
+    end
+    buffer.rewind
   end
 
   private def self.parse_json(input : String | IO) : SarifLog

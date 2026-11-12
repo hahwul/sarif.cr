@@ -2354,5 +2354,16 @@ describe Sarif::Validator do
       errors_for.call(%("A": {"uri": "a/", "uriBaseId": "B"}, "B": {"uri": "b/", "uriBaseId": "A"},
         "C": {"uri": "c/", "uriBaseId": "A"})).should eq(["$.runs[0].originalUriBaseIds.A.uriBaseId", "$.runs[0].originalUriBaseIds.B.uriBaseId"])
     end
+
+    it "stays linear on a long uriBaseId chain" do
+      n = 20_000
+      chain = (0...n).map { |i| %("B#{i}": {"uri": "d/", "uriBaseId": "B#{(i + 1) % n}"}) }.join(",")
+      elapsed = Time.measure { errors_for.call(chain).size.should eq(n) }
+      elapsed.should be < 2.seconds
+    end
+
+    it "checks the arguments of an entry's description" do
+      errors_for.call(%("A": {"uri": "file:///x/", "description": {"text": "{3}"}})).should eq(["$.runs[0].originalUriBaseIds.A.description.arguments"])
+    end
   end
 end
