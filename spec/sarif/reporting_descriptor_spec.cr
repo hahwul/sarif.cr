@@ -135,11 +135,18 @@ describe Sarif::ReportingDescriptor do
       ).valid?.should be_false
     end
 
-    it "returns false for negative rank in default configuration" do
+    it "returns false for negative rank other than -1.0 in default configuration" do
+      Sarif::ReportingDescriptor.new(
+        id: "R1",
+        default_configuration: Sarif::ReportingConfiguration.new(rank: -0.5)
+      ).valid?.should be_false
+    end
+
+    it "returns true for the -1.0 (unknown) rank in default configuration" do
       Sarif::ReportingDescriptor.new(
         id: "R1",
         default_configuration: Sarif::ReportingConfiguration.new(rank: -1.0)
-      ).valid?.should be_false
+      ).valid?.should be_true
     end
   end
 

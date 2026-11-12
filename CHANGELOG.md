@@ -5,6 +5,7 @@
 ### Breaking changes
 
 - `SarifLog#runs` is now `Array(Run)?` (was `Array(Run)`), and `SarifLog.new(runs:)` accepts `nil`. SARIF 2.1.0 §3.13.4 allows `"runs": null` when the tool failed to start; such logs now parse and round-trip as `"runs": null` (the key is always emitted). A missing `runs` key is still rejected. Migrate `log.runs[0]` to `log.runs![0]` (raises `Sarif::Error` on null) or `log.runs.try &.each`. Query helpers (`all_results`, `find_results`, ...), `valid?` and `Validator` treat null runs as empty.
+- `Run#resolve_rule_reference` no longer looks descriptors up by `id`. It now resolves only by `index`, then `guid`, within the `toolComponent` (§3.52.3). `id` does not take part in the lookup (§3.52.4 NOTE), and an id-only reference has no descriptor (§3.52.1), so such a reference now returns `nil`. `Result#resolve_rule`, `#effective_level` and configuration-override matching keep their id-based fallback (`rule.id`/`ruleId`, exact then hierarchical, within the referenced component), which is now documented as a consumer convenience. Callers of `resolve_rule_reference` that relied on id lookup should call `Result#resolve_rule` or `ToolComponent#find_rule`.
 - `Region#byte_offset`, `#byte_length`, `#char_offset`, `#char_length` and `Artifact#offset` are now `Int64?` (were `Int32?`) so files larger than 2 GiB can be described. Integer literals still autocast; `Int32` variables passed to these setters/constructors need `.to_i64`.
 
 ### Added
@@ -13,6 +14,8 @@
 - `Result#effective_rule_id` (`ruleId`, else `rule.id`).
 
 ### Fixed
+- `Validator` and the `valid?` helpers accept an explicit `rank: -1.0` on results and reporting configurations. The schema allows it (`minimum: -1.0`, the "unknown" default); other values outside 0.0-100.0 are still rejected.
+- `Validator` checks the message argument count (§3.11.11): a `{n}` placeholder needs at least n+1 `arguments`. The check covers `text`, `markdown`, and the string `message.id` looks up in the rule's (or notification descriptor's) `messageStrings` or the component's `globalMessageStrings` when it resolves. `{{`/`}}` are escapes (§3.11.5). Result and notification messages are checked, and so are location, codeFlow, threadFlow, stack and fix messages.
 
 - A leading UTF-8 byte order mark is ignored by `Sarif.parse`, `Sarif.from_file` and `SarifLog.from_json`, including IOs that deliver it across short reads (RFC 8259 §8.1). Output never contains a BOM.
 - `Validator` rejects a negative `artifact.offset` (schema `minimum: 0`).

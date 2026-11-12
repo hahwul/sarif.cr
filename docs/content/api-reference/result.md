@@ -44,7 +44,7 @@ Sarif::Result.new(
 | `related_locations` | `Array(Location)?` | `relatedLocations` | Related code locations |
 | `suppressions` | `Array(Suppression)?` | `suppressions` | Suppression info |
 | `baseline_state` | `BaselineState?` | `baselineState` | Baseline comparison |
-| `rank` | `Float64?` | `rank` | Priority ranking (0.0 - 100.0) |
+| `rank` | `Float64?` | `rank` | Priority ranking (0.0 - 100.0; -1.0 means unknown) |
 | `fixes` | `Array(Fix)?` | `fixes` | Proposed fixes |
 | `taxa` | `Array(ReportingDescriptorReference)?` | `taxa` | Taxonomy references |
 | `web_request` | `WebRequest?` | `webRequest` | Associated HTTP request |

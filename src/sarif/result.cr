@@ -162,40 +162,42 @@ module Sarif
 
     # Resolves the `ReportingDescriptor` associated with this result.
     #
-    # `rule` (§3.27.7) selects the tool component and takes precedence, with its
-    # absent `id`/`index` defaulting to this result's `ruleId`/`ruleIndex`.
-    # Otherwise the run's `tool.driver.rules` are searched by `rule_index` then
-    # `rule_id`. An index of `-1` is the "no descriptor" sentinel and never
-    # resolves.
+    # The lookup reference is `rule`, with its absent `id`/`index` defaulting to
+    # this result's `ruleId`/`ruleIndex`; with no `rule`, it is `{id: ruleId,
+    # index: ruleIndex}` (§3.27.7). It is resolved by `toolComponent`, `index`
+    # and `guid` as `Run#resolve_rule_reference` describes (§3.52.3). An index
+    # of `-1` is the "no descriptor" sentinel and never resolves.
+    #
+    # When that finds nothing (no usable `index` or `guid`, or one that
+    # dangles), the rule is looked up by the reference's id in the referenced
+    # component; see `#lookup_rule`.
     #
     # See: [SARIF 2.1.0 §3.27.7](https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html#_Toc34317645)
     def resolve_rule(run : Run) : ReportingDescriptor?
-      if reference = rule
-        return run.resolve_rule_reference(
-          ReportingDescriptorReference.new(
-            id: reference.id || rule_id,
-            index: reference.index || rule_index,
-            guid: reference.guid,
-            tool_component: reference.tool_component
-          )
-        )
+      lookup_rule(run, ReportingDescriptorReference.new(
+        id: rule.try(&.id) || rule_id,
+        index: rule.try(&.index) || rule_index,
+        guid: rule.try(&.guid),
+        tool_component: rule.try(&.tool_component)
+      ))
+    end
+
+    # `Run#resolve_rule_reference` (§3.52.3: `index`, then `guid`), else the
+    # rule in the referenced component whose id `reference.id` names (exact id
+    # first, then the hierarchical form, see `ToolComponent#find_rule`).
+    #
+    # The id step is a consumer convenience, not part of the §3.52.3 lookup,
+    # where `id` does not participate (§3.52.4 NOTE). It is kept because
+    # `ruleId`'s leading components are the rule's stable id (§3.27.5,
+    # §3.49.3), many producers emit only `ruleId` (the case §3.27.7 NOTE 2
+    # describes), and producers such as the sarif-sdk write configuration
+    # overrides whose `descriptor` carries only an `id`.
+    private def lookup_rule(run : Run, reference : ReportingDescriptorReference) : ReportingDescriptor?
+      if descriptor = run.resolve_rule_reference(reference)
+        return descriptor
       end
-
-      driver = run.tool.driver
-      rules = driver.rules
-      return unless rules
-
-      if (idx = rule_index) && idx >= 0
-        if descriptor = rules[idx]?
-          return descriptor
-        end
-      end
-
-      if rid = rule_id
-        return driver.find_rule(rid)
-      end
-
-      nil
+      return unless rid = reference.id
+      run.tool_component_for(reference.tool_component).try &.find_rule(rid)
     end
 
     # Returns the level set by the `configurationOverride` that this result's
@@ -213,7 +215,7 @@ module Sarif
       return unless overrides
 
       overrides.each do |override|
-        next unless run.resolve_rule_reference(override.descriptor).try &.same?(descriptor)
+        next unless lookup_rule(run, override.descriptor).try &.same?(descriptor)
         if lvl = override.configuration.level
           return lvl
         end
@@ -239,7 +241,7 @@ module Sarif
 
     def valid? : Bool
       return false unless message.valid?
-      if (r = rank) && (r < 0.0 || r > 100.0)
+      if (r = rank) && !Sarif.valid_rank?(r)
         return false
       end
       if (c = occurrence_count) && c < 1

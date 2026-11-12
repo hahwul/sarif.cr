@@ -442,6 +442,42 @@ describe Sarif::Result do
       run.results.not_nil!.first.resolve_rule(run).not_nil!.id.should eq("RULE001")
     end
 
+    it "falls back to rule.id within rule.toolComponent" do
+      run = Sarif::Run.new(
+        tool: Sarif::Tool.new(
+          driver: Sarif::ToolComponent.new(name: "Driver", rules: [Sarif::ReportingDescriptor.new(id: "EXT001")]),
+          extensions: [
+            Sarif::ToolComponent.new(name: "Plugin", rules: [
+              Sarif::ReportingDescriptor.new(id: "OTHER"),
+              Sarif::ReportingDescriptor.new(id: "EXT001", name: "in-plugin"),
+            ]),
+          ]
+        ),
+        results: [
+          Sarif::Result.new(
+            message: Sarif::Message.new(text: "test"), rule_id: "EXT001",
+            rule: Sarif::ReportingDescriptorReference.new(tool_component: Sarif::ToolComponentReference.new(index: 0))
+          ),
+        ]
+      )
+      run.results.not_nil!.first.resolve_rule(run).not_nil!.name.should eq("in-plugin")
+    end
+
+    it "does not fall back by id when rule.toolComponent dangles" do
+      run = Sarif::Run.new(
+        tool: Sarif::Tool.new(
+          driver: Sarif::ToolComponent.new(name: "Driver", rules: [Sarif::ReportingDescriptor.new(id: "R1")])
+        ),
+        results: [
+          Sarif::Result.new(
+            message: Sarif::Message.new(text: "test"), rule_id: "R1",
+            rule: Sarif::ReportingDescriptorReference.new(tool_component: Sarif::ToolComponentReference.new(index: 4))
+          ),
+        ]
+      )
+      run.results.not_nil!.first.resolve_rule(run).should be_nil
+    end
+
     it "does not resolve the -1 ruleIndex sentinel positionally" do
       rule = Sarif::ReportingDescriptor.new(id: "RULE001")
       run = Sarif::Run.new(

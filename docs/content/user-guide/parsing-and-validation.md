@@ -95,6 +95,7 @@ The validator checks for:
 - **Version** -- Must be `"2.1.0"`
 - **Tool driver name** -- Must not be empty
 - **Result message** -- Must have either `text` or `id`
+- **Message arguments** -- A `{n}` placeholder in `text`, `markdown` or the string `id` looks up (the rule's or notification descriptor's `messageStrings`, then the component's `globalMessageStrings`) needs at least n+1 `arguments`; `{{` and `}}` are escaped braces (§3.11.5, §3.11.11)
 - **Rule index** -- `ruleIndex` (or `rule.index`) must reference a valid rule in the tool component named by `rule.toolComponent` (the driver by default)
 - **Rule ID consistency** -- `ruleId` (or `rule.id`) must match the rule at that index
 - **Descriptor references** -- `rule`, `taxa`, notification `descriptor`/`associatedRule`, configuration override `descriptor` and rule relationship `target` must carry at least one of `index`, `guid` or `id`
@@ -102,7 +103,7 @@ The validator checks for:
 - **GUID format** -- Must be an RFC 4122 UUID (version 1-5, variant `8`/`9`/`a`/`b`), as in the official schema
 - **Timestamp format** -- Must be RFC 3339
 - **URI format** -- Must be absolute URI
-- **Result rank** -- Must be 0.0–100.0
+- **Result rank** -- Must be 0.0–100.0, or -1.0 (unknown)
 - **Occurrence count** -- Must be >= 1
 - **Code flow** -- Must have at least one thread flow
 - **Thread flow** -- Must have at least one location
@@ -150,7 +151,7 @@ message = Sarif::Message.new(text: "Issue found")
 message.valid?  # => true (has text)
 
 result = Sarif::Result.new(message: message)
-result.valid?   # => true (checks message, rank 0-100, occurrence_count >= 1)
+result.valid?   # => true (checks message, rank 0-100 or -1, occurrence_count >= 1)
 
 run = Sarif::Run.new(tool: Sarif::Tool.new(driver: driver))
 run.valid?      # => true (checks driver name and all results)

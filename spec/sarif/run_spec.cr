@@ -305,29 +305,43 @@ describe Sarif::Run do
       run.resolve_rule_reference(reference).not_nil!.id.should eq("EXT001")
     end
 
-    it "resolves by hierarchical id" do
+    it "resolves by guid within the referenced component" do
+      guid = "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d"
+      run = Sarif::Run.new(
+        tool: Sarif::Tool.new(
+          driver: Sarif::ToolComponent.new(name: "Driver", rules: [
+            Sarif::ReportingDescriptor.new(id: "R0"),
+            Sarif::ReportingDescriptor.new(id: "R1", guid: guid),
+          ])
+        )
+      )
+      run.resolve_rule_reference(Sarif::ReportingDescriptorReference.new(guid: guid)).not_nil!.id.should eq("R1")
+    end
+
+    # §3.52.4 NOTE: id "does not participate in the lookup"; §3.52.1: a
+    # reference with only an id has no descriptor.
+    it "does not look descriptors up by id" do
       run = Sarif::Run.new(
         tool: Sarif::Tool.new(
           driver: Sarif::ToolComponent.new(name: "Driver", rules: [Sarif::ReportingDescriptor.new(id: "CA5350")])
         )
       )
-      run.resolve_rule_reference(Sarif::ReportingDescriptorReference.new(id: "CA5350/md5")).not_nil!.id.should eq("CA5350")
+      run.resolve_rule_reference(Sarif::ReportingDescriptorReference.new(id: "CA5350")).should be_nil
+      run.resolve_rule_reference(Sarif::ReportingDescriptorReference.new(id: "CA5350/md5")).should be_nil
+      run.resolve_rule_reference(Sarif::ReportingDescriptorReference.new(id: "CA5350", index: 3)).should be_nil
     end
 
-    it "prefers an exact id match over a hierarchical one regardless of order" do
+    it "lets index win over a mismatching id" do
       run = Sarif::Run.new(
         tool: Sarif::Tool.new(
-          driver: Sarif::ToolComponent.new(
-            name: "Driver",
-            rules: [
-              Sarif::ReportingDescriptor.new(id: "CA5350"),
-              Sarif::ReportingDescriptor.new(id: "CA5350/md5"),
-            ]
-          )
+          driver: Sarif::ToolComponent.new(name: "Driver", rules: [
+            Sarif::ReportingDescriptor.new(id: "R0"),
+            Sarif::ReportingDescriptor.new(id: "R1"),
+          ])
         )
       )
-      reference = Sarif::ReportingDescriptorReference.new(id: "CA5350/md5")
-      run.resolve_rule_reference(reference).not_nil!.id.should eq("CA5350/md5")
+      reference = Sarif::ReportingDescriptorReference.new(id: "R0", index: 1)
+      run.resolve_rule_reference(reference).not_nil!.id.should eq("R1")
     end
 
     it "returns nil when the reference cannot be resolved" do

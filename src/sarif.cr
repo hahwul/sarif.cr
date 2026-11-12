@@ -7,6 +7,14 @@ module Sarif
   # group starts with the version (1-5) and fourth group with the variant
   # (8, 9, a or b). Same pattern as the official sarif-schema-2.1.0.json.
   GUID_PATTERN = /\A[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}\z/
+
+  # Whether `rank` is a value `result.rank` (§3.27.25) or
+  # `reportingConfiguration.rank` (§3.50.4) may hold: 0.0 to 100.0 inclusive,
+  # or -1.0, the "unknown" default that the schema (minimum -1.0) also allows
+  # explicitly.
+  def self.valid_rank?(rank : Float64) : Bool
+    rank == -1.0 || (0.0..100.0).includes?(rank)
+  end
 end
 
 # Errors and foundation

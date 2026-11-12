@@ -76,7 +76,7 @@ module Sarif
       if (g = guid) && !g.matches?(GUID_PATTERN)
         return false
       end
-      if (config = default_configuration) && (rank = config.rank) && (rank < 0.0 || rank > 100.0)
+      if (config = default_configuration) && (rank = config.rank) && !Sarif.valid_rank?(rank)
         return false
       end
       true

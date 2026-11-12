@@ -181,8 +181,14 @@ module Sarif
 
     # Resolves a `ReportingDescriptorReference` to the rule it identifies.
     #
-    # The reference's `toolComponent` selects the component to search; `index`
-    # then `guid` then `id` select the descriptor within it.
+    # The reference's `toolComponent` selects the component to search (the
+    # driver by default, §3.52.7); `index` then `guid` select the descriptor
+    # within its `rules`. `id` does not participate in the lookup (§3.52.4
+    # NOTE), and a reference with only an `id` has no descriptor (§3.52.1), so
+    # it resolves to `nil`.
+    #
+    # To find the rule a `Result` reports, including through `ruleId` alone,
+    # use `Result#resolve_rule`.
     #
     # See: [SARIF 2.1.0 §3.52.3](https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html#_Toc34317870)
     def resolve_rule_reference(reference : ReportingDescriptorReference) : ReportingDescriptor?
@@ -198,13 +204,7 @@ module Sarif
       end
 
       if guid = reference.guid
-        if descriptor = rules.find { |r| r.guid == guid }
-          return descriptor
-        end
-      end
-
-      if rid = reference.id
-        return component.find_rule(rid)
+        return rules.find { |r| r.guid == guid }
       end
 
       nil
