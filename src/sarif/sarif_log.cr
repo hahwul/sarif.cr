@@ -113,7 +113,7 @@ module Sarif
 
     # Returns results matching the given rule ID across all runs.
     def results_by_rule_id(rule_id : String) : Array(Result)
-      all_results.select { |r| r.rule_id == rule_id }
+      all_results.select { |r| r.effective_rule_id == rule_id }
     end
 
     # Filters results by multiple criteria simultaneously.
@@ -123,7 +123,7 @@ module Sarif
       matched = [] of Result
       runs.try &.each do |run|
         run.results.try &.each do |r|
-          next if rule_id && r.rule_id != rule_id
+          next if rule_id && r.effective_rule_id != rule_id
           next if level && r.effective_level(run) != level
           next if kind && r.effective_kind != kind
           matched << r
@@ -163,7 +163,7 @@ module Sarif
     def result_counts_by_rule_id : Hash(String, Int32)
       counts = {} of String => Int32
       all_results.each do |r|
-        if rid = r.rule_id
+        if rid = r.effective_rule_id
           counts[rid] = (counts[rid]? || 0) + 1
         end
       end

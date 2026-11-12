@@ -334,4 +334,21 @@ describe Sarif::SarifLog do
       log.valid?.should be_false
     end
   end
+
+  describe "rule.id-only results (SARIF 2.1.0 §3.27.5)" do
+    it "are found by the rule_id queries" do
+      log = Sarif.parse(%({"version": "2.1.0", "runs": [{"tool": {"driver": {"name": "x"}}, "results": [
+        {"rule": {"id": "R1"}, "message": {"text": "only rule.id"}},
+        {"ruleId": "R1", "message": {"text": "only ruleId"}},
+        {"ruleId": "R2", "rule": {"id": "R2"}, "message": {"text": "both"}}]}]}))
+      log.results_by_rule_id("R1").size.should eq(2)
+      log.find_results(rule_id: "R1").size.should eq(2)
+      log.result_counts_by_rule_id.should eq({"R1" => 2, "R2" => 1})
+      run = log.runs!.first
+      run.results_by_rule_id("R1").size.should eq(2)
+      run.find_results(rule_id: "R1").size.should eq(2)
+      run.result_counts_by_rule_id.should eq({"R1" => 2, "R2" => 1})
+      run.results.not_nil!.map(&.effective_rule_id).should eq(["R1", "R1", "R2"])
+    end
+  end
 end

@@ -222,6 +222,17 @@ module Sarif
       nil
     end
 
+    # The rule id this result reports: `ruleId`, or else `rule.id`.
+    #
+    # A direct producer SHALL emit at least one of the two, and when both are
+    # present they are equal (§3.27.5), so a result that carries only
+    # `rule.id` still names its rule.
+    #
+    # See: [SARIF 2.1.0 §3.27.5](https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html#_Toc34317643)
+    def effective_rule_id : String?
+      rule_id || rule.try(&.id)
+    end
+
     def effective_kind : ResultKind
       kind || ResultKind::Fail
     end

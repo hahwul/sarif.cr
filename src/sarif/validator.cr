@@ -106,9 +106,7 @@ module Sarif
       end
 
       run.thread_flow_locations.try &.each_with_index do |tfl, j|
-        if location = tfl.location
-          validate_location(location, "#{path}.threadFlowLocations[#{j}].location", errors)
-        end
+        validate_thread_flow_location(tfl, "#{path}.threadFlowLocations[#{j}]", errors)
       end
 
       if refs = run.external_property_file_references
@@ -116,6 +114,19 @@ module Sarif
       end
 
       validate_guid(run.baseline_guid, "#{path}.baselineGuid", errors)
+
+      if details = run.automation_details
+        validate_automation_details(details, "#{path}.automationDetails", errors)
+      end
+      run.run_aggregates.try &.each_with_index do |aggregate, j|
+        validate_automation_details(aggregate, "#{path}.runAggregates[#{j}]", errors)
+      end
+    end
+
+    private def validate_automation_details(details : RunAutomationDetails, path : String,
+                                            errors : Array(ValidationError))
+      validate_guid(details.guid, "#{path}.guid", errors)
+      validate_guid(details.correlation_guid, "#{path}.correlationGuid", errors)
     end
 
     private def validate_tool(tool : Tool, path : String, errors : Array(ValidationError))
@@ -160,10 +171,17 @@ module Sarif
       end
 
       validate_guid(descriptor.guid, "#{path}.guid", errors)
+      descriptor.deprecated_guids.try &.each_with_index do |guid, i|
+        validate_guid(guid, "#{path}.deprecatedGuids[#{i}]", errors)
+      end
       validate_uri(descriptor.help_uri, "#{path}.helpUri", errors)
 
       if config = descriptor.default_configuration
         validate_reporting_configuration(config, "#{path}.defaultConfiguration", errors)
+      end
+
+      descriptor.relationships.try &.each_with_index do |relationship, i|
+        validate_descriptor_reference(relationship.target, "#{path}.relationships[#{i}].target", errors)
       end
     end
 
@@ -182,6 +200,25 @@ module Sarif
 
       validate_enum(result.level, "#{path}.level", errors)
       validate_enum(result.kind, "#{path}.kind", errors)
+
+      # §3.27.10: when kind is anything but "fail", level SHALL be "none".
+      # Values outside the vocabulary are reported by `validate_enum` above.
+      kind, level = result.kind, result.level
+      if kind && level && !kind.fail? && !kind.unknown? && !level.none? && !level.unknown?
+        errors << ValidationError.new(
+          "level must be 'none' when kind is '#{kind.to_s_sarif}', got '#{level.to_s_sarif}'",
+          "#{path}.level"
+        )
+      end
+
+      result.taxa.try &.each_with_index do |taxon, k|
+        validate_descriptor_reference(taxon, "#{path}.taxa[#{k}]", errors)
+      end
+
+      validate_uri(result.hosted_viewer_uri, "#{path}.hostedViewerUri", errors)
+      result.work_item_uris.try &.each_with_index do |uri, k|
+        validate_uri(uri, "#{path}.workItemUris[#{k}]", errors)
+      end
       validate_enum(result.baseline_state, "#{path}.baselineState", errors)
 
       validate_guid(result.guid, "#{path}.guid", errors)
@@ -251,46 +288,96 @@ module Sarif
     # names, which defaults to the driver (§3.27.6, §3.52.3).
     private def validate_result_rule(result : Result, run : Run, path : String,
                                      errors : Array(ValidationError))
-      rules = run.tool_component_for(result.rule.try(&.tool_component)).try(&.rules)
+      reference = result.rule
+      if reference
+        # `ruleId` / `ruleIndex` supply `rule.id` / `rule.index` by default, so
+        # a `rule` that only names its toolComponent is still identified.
+        identified = !result.rule_id.nil? || !result.rule_index.nil?
+        validate_descriptor_reference(reference, "#{path}.rule", errors, identified: identified)
+      end
 
-      if rule_index = result.rule_index
-        if rule_index < NO_INDEX
-          errors << ValidationError.new(
-            "ruleIndex must be >= -1, got #{rule_index}",
-            "#{path}.ruleIndex"
-          )
-        elsif rule_index != NO_INDEX
-          if rules && rule_index < rules.size
-            descriptor = rules[rule_index]
-            if (rule_id = result.rule_id) && !descriptor.matches_id?(rule_id)
-              errors << ValidationError.new(
-                "ruleId '#{rule_id}' does not match rule at ruleIndex #{rule_index} ('#{descriptor.id}')",
-                "#{path}.ruleId"
-              )
-            end
-          else
+      component_reference = reference.try(&.tool_component)
+      component = run.tool_component_for(component_reference)
+      unless component
+        errors << ValidationError.new(
+          "rule.toolComponent does not identify a tool component of this run",
+          "#{path}.rule.toolComponent"
+        )
+        return
+      end
+      rules = component.rules
+
+      # `rule.index` defaults to `ruleIndex` (§3.27.7, §3.52.5), so the lookup
+      # runs on whichever is given.
+      index_label, rule_index = if idx = result.rule_index
+                                  {"ruleIndex", idx}
+                                else
+                                  {"rule.index", reference.try(&.index)}
+                                end
+
+      # A negative `rule.index` is reported by `validate_descriptor_reference`.
+      validate_min(result.rule_index, NO_INDEX, "#{path}.ruleIndex", "ruleIndex", errors)
+
+      if rule_index && rule_index >= 0
+        if rules && rule_index < rules.size
+          descriptor = rules[rule_index]
+          # Both ids have to identify the descriptor (§3.27.5, §3.52.4).
+          {"ruleId" => result.rule_id, "rule.id" => reference.try(&.id)}.each do |id_label, rule_id|
+            next if rule_id.nil? || descriptor.matches_id?(rule_id)
             errors << ValidationError.new(
-              "Invalid ruleIndex: #{rule_index}",
-              "#{path}.ruleIndex"
+              "#{id_label} '#{rule_id}' does not match rule at #{index_label} #{rule_index} ('#{descriptor.id}')",
+              "#{path}.#{id_label}"
             )
           end
+        else
+          errors << ValidationError.new(
+            "Invalid #{index_label}: #{rule_index}",
+            "#{path}.#{index_label}"
+          )
         end
       end
 
-      return unless reference = result.rule
+      return unless reference
 
-      if (reference_id = reference.id) && (rule_id = result.rule_id) && reference_id != rule_id
+      if (reference_id = reference.id) && (result_rule_id = result.rule_id) && reference_id != result_rule_id
         errors << ValidationError.new(
-          "rule.id '#{reference_id}' must equal ruleId '#{rule_id}'",
+          "rule.id '#{reference_id}' must equal ruleId '#{result_rule_id}'",
           "#{path}.rule.id"
         )
       end
 
-      if (reference_index = reference.index) && (rule_index = result.rule_index) && reference_index != rule_index
+      if (reference_index = reference.index) && (result_rule_index = result.rule_index) && reference_index != result_rule_index
         errors << ValidationError.new(
-          "rule.index #{reference_index} must equal ruleIndex #{rule_index}",
+          "rule.index #{reference_index} must equal ruleIndex #{result_rule_index}",
           "#{path}.rule.index"
         )
+      end
+    end
+
+    # Schema constraints shared by every reportingDescriptorReference (§3.52):
+    # it SHALL carry at least one of index, guid and id, and its index and
+    # toolComponent are subject to the usual -1 sentinel and GUID rules.
+    private def validate_descriptor_reference(reference : ReportingDescriptorReference, path : String,
+                                              errors : Array(ValidationError), *, identified : Bool = false)
+      if !identified && reference.index.nil? && reference.guid.nil? && reference.id.nil?
+        errors << ValidationError.new(
+          "reportingDescriptorReference must have at least one of index, guid or id",
+          path
+        )
+      end
+      validate_min(reference.index, NO_INDEX, "#{path}.index", "index", errors)
+      validate_guid(reference.guid, "#{path}.guid", errors)
+
+      if component = reference.tool_component
+        validate_min(component.index, NO_INDEX, "#{path}.toolComponent.index", "index", errors)
+        validate_guid(component.guid, "#{path}.toolComponent.guid", errors)
+      end
+    end
+
+    private def validate_min(value : Int?, min : Int, path : String, name : String,
+                             errors : Array(ValidationError))
+      if value && value < min
+        errors << ValidationError.new("#{name} must be >= #{min}, got #{value}", path)
       end
     end
 
@@ -349,6 +436,14 @@ module Sarif
         end
       end
 
+      inv.rule_configuration_overrides.try &.each_with_index do |override, i|
+        validate_configuration_override(override, "#{path}.ruleConfigurationOverrides[#{i}]", errors)
+      end
+
+      inv.notification_configuration_overrides.try &.each_with_index do |override, i|
+        validate_configuration_override(override, "#{path}.notificationConfigurationOverrides[#{i}]", errors)
+      end
+
       inv.tool_execution_notifications.try &.each_with_index do |notif, i|
         validate_notification(notif, "#{path}.toolExecutionNotifications[#{i}]", errors, depth: depth + 1)
       end
@@ -356,6 +451,12 @@ module Sarif
       inv.tool_configuration_notifications.try &.each_with_index do |notif, i|
         validate_notification(notif, "#{path}.toolConfigurationNotifications[#{i}]", errors, depth: depth + 1)
       end
+    end
+
+    private def validate_configuration_override(override : ConfigurationOverride, path : String,
+                                                errors : Array(ValidationError))
+      validate_descriptor_reference(override.descriptor, "#{path}.descriptor", errors)
+      validate_reporting_configuration(override.configuration, "#{path}.configuration", errors)
     end
 
     private def validate_notification(notif : Notification, path : String,
@@ -369,6 +470,13 @@ module Sarif
 
       validate_enum(notif.level, "#{path}.level", errors)
       validate_timestamp(notif.time_utc, "#{path}.timeUtc", errors)
+
+      if descriptor = notif.descriptor
+        validate_descriptor_reference(descriptor, "#{path}.descriptor", errors)
+      end
+      if associated_rule = notif.associated_rule
+        validate_descriptor_reference(associated_rule, "#{path}.associatedRule", errors)
+      end
 
       notif.locations.try &.each_with_index do |loc, i|
         validate_location(loc, "#{path}.locations[#{i}]", errors)
@@ -451,13 +559,23 @@ module Sarif
         end
 
         tf.locations.each_with_index do |tfl, j|
-          tfl_path = "#{path}.threadFlows[#{i}].locations[#{j}]"
-          validate_enum(tfl.importance, "#{tfl_path}.importance", errors)
-          validate_timestamp(tfl.execution_time_utc, "#{tfl_path}.executionTimeUtc", errors)
-          if location = tfl.location
-            validate_location(location, "#{tfl_path}.location", errors)
-          end
+          validate_thread_flow_location(tfl, "#{path}.threadFlows[#{i}].locations[#{j}]", errors)
         end
+      end
+    end
+
+    private def validate_thread_flow_location(tfl : ThreadFlowLocation, path : String,
+                                              errors : Array(ValidationError))
+      validate_min(tfl.index, NO_INDEX, "#{path}.index", "index", errors)
+      validate_min(tfl.nesting_level, 0, "#{path}.nestingLevel", "nestingLevel", errors)
+      validate_min(tfl.execution_order, NO_INDEX, "#{path}.executionOrder", "executionOrder", errors)
+      validate_enum(tfl.importance, "#{path}.importance", errors)
+      validate_timestamp(tfl.execution_time_utc, "#{path}.executionTimeUtc", errors)
+      tfl.taxa.try &.each_with_index do |taxon, k|
+        validate_descriptor_reference(taxon, "#{path}.taxa[#{k}]", errors)
+      end
+      if location = tfl.location
+        validate_location(location, "#{path}.location", errors)
       end
     end
 
@@ -489,6 +607,11 @@ module Sarif
 
     private def validate_location(location : Location, path : String,
                                   errors : Array(ValidationError))
+      validate_min(location.id, NO_INDEX, "#{path}.id", "location id", errors)
+      location.relationships.try &.each_with_index do |relationship, i|
+        validate_min(relationship.target, 0, "#{path}.relationships[#{i}].target", "target", errors)
+      end
+
       if physical = location.physical_location
         validate_physical_location(physical, "#{path}.physicalLocation", errors)
       end
@@ -620,7 +743,7 @@ module Sarif
       return unless value
       unless GUID_PATTERN.matches?(value)
         errors << ValidationError.new(
-          "Invalid GUID format: '#{value}'. Expected UUID format (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)",
+          "Invalid GUID format: '#{value}'. Expected an RFC 4122 UUID (xxxxxxxx-xxxx-Mxxx-Nxxx-xxxxxxxxxxxx, M = 1-5, N = 8, 9, a or b)",
           path
         )
       end

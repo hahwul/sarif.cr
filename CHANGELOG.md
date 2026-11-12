@@ -10,11 +10,15 @@
 ### Added
 
 - `SarifLog#runs!`.
+- `Result#effective_rule_id` (`ruleId`, else `rule.id`).
 
 ### Fixed
 
 - A leading UTF-8 byte order mark is ignored by `Sarif.parse`, `Sarif.from_file` and `SarifLog.from_json`, including IOs that deliver it across short reads (RFC 8259 §8.1). Output never contains a BOM.
 - `Validator` rejects a negative `artifact.offset` (schema `minimum: 0`).
+- `Sarif::GUID_PATTERN` (used by `Validator` and `ReportingDescriptor#valid?`) now requires the RFC 4122 version (1-5) and variant (8, 9, a, b) digits, the same pattern as the official schema (§3.5.3). GUIDs such as `22222222-2222-2222-2222-222222222222`, the nil UUID and v6-v8 UUIDs are now rejected.
+- `results_by_rule_id`, `find_results(rule_id:)` and `result_counts_by_rule_id` on `Run` and `SarifLog` also match results that name their rule only through `rule.id` (§3.27.5).
+- `Validator` false negatives: `rule.index`/`rule.id` are checked when `ruleIndex`/`ruleId` are absent (and both ids are checked against the descriptor); a `rule.toolComponent` that resolves to nothing is reported; every reportingDescriptorReference (`rule`, `taxa`, notification `descriptor`/`associatedRule`, configuration override `descriptor`, rule `relationships[].target`) needs `index`, `guid` or `id`; `level` must be `none` when `kind` is not `fail` (§3.27.10); `automationDetails`/`runAggregates` GUIDs, `deprecatedGuids`, `workItemUris`, `hostedViewerUri`, `location.id`, location relationship `target` and threadFlowLocation `index`/`nestingLevel`/`executionOrder` are checked against the schema.
 
 ## v0.2.0
 

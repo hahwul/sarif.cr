@@ -117,8 +117,15 @@ describe Sarif::ReportingDescriptor do
     it "returns true for valid guid" do
       Sarif::ReportingDescriptor.new(
         id: "R1",
-        guid: "12345678-1234-1234-1234-123456789abc"
+        guid: "12345678-1234-1234-a234-123456789abc"
       ).valid?.should be_true
+    end
+
+    it "returns false for a guid with no RFC 4122 version or variant (§3.5.3)" do
+      Sarif::ReportingDescriptor.new(
+        id: "R1",
+        guid: "22222222-2222-2222-2222-222222222222"
+      ).valid?.should be_false
     end
 
     it "returns false for rank > 100 in default configuration" do
