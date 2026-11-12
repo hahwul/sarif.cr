@@ -344,6 +344,21 @@ describe Sarif::Run do
       run.resolve_rule_reference(reference).not_nil!.id.should eq("R1")
     end
 
+    it "resolves notification references within notifications, not rules" do
+      run = Sarif::Run.new(
+        tool: Sarif::Tool.new(
+          driver: Sarif::ToolComponent.new(
+            name: "Driver",
+            rules: [Sarif::ReportingDescriptor.new(id: "R0")],
+            notifications: [Sarif::ReportingDescriptor.new(id: "N0")]
+          )
+        )
+      )
+      reference = Sarif::ReportingDescriptorReference.new(index: 0)
+      run.resolve_notification_reference(reference).not_nil!.id.should eq("N0")
+      run.resolve_rule_reference(reference).not_nil!.id.should eq("R0")
+    end
+
     it "returns nil when the reference cannot be resolved" do
       run = Sarif::Run.new(tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Driver")))
       run.resolve_rule_reference(Sarif::ReportingDescriptorReference.new(id: "NOPE")).should be_nil

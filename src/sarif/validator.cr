@@ -125,6 +125,7 @@ module Sarif
 
     private def validate_automation_details(details : RunAutomationDetails, path : String,
                                             errors : Array(ValidationError))
+      validate_message_arguments(details.description, "#{path}.description", errors)
       validate_guid(details.guid, "#{path}.guid", errors)
       validate_guid(details.correlation_guid, "#{path}.correlationGuid", errors)
     end
@@ -271,6 +272,10 @@ module Sarif
         validate_fix(fix, "#{path}.fixes[#{k}]", errors)
       end
 
+      result.attachments.try &.each_with_index do |attachment, k|
+        validate_message_arguments(attachment.description, "#{path}.attachments[#{k}].description", errors)
+      end
+
       result.suppressions.try &.each_with_index do |suppression, k|
         validate_suppression(suppression, "#{path}.suppressions[#{k}]", errors)
       end
@@ -390,7 +395,8 @@ module Sarif
     # placeholder index (§3.11.5) among the message strings given by `text`,
     # `markdown` and `id` requires. The block looks `id` up (§3.11.7) and
     # returns nil when it cannot be resolved; then only `text` and `markdown`
-    # are checked. Messages outside results and notifications are checked
+    # are checked. §3.11.7 consults a descriptor's messageStrings only for
+    # `result.message` and `notification.message`; other messages are checked
     # without an id lookup.
     private def validate_message_arguments(message : Message?, path : String,
                                            errors : Array(ValidationError), & : String -> MultiformatMessageString?)
@@ -533,14 +539,10 @@ module Sarif
       validate_message_arguments(notif.message, "#{path}.message", errors) do |id|
         reference = notif.descriptor
         component = run.tool_component_for(reference.try(&.tool_component))
-        descriptors = component.try(&.notifications)
-        descriptor = if reference && descriptors
-                       if (idx = reference.index) && idx >= 0
-                         descriptors[idx]?
-                       elsif guid = reference.guid
-                         descriptors.find { |d| d.guid == guid }
-                       end
-                     end
+        # §3.52.3 lookup, then the same id fallback `Result#resolve_rule` uses
+        # (sarif-sdk style descriptors carry only an id).
+        descriptor = reference.try { |ref| run.resolve_notification_reference(ref) } ||
+                     reference.try(&.id).try { |rid| component.try(&.notifications).try &.find { |d| d.id == rid } }
         descriptor.try(&.message_strings).try(&.[id]?) ||
           component.try(&.global_message_strings).try(&.[id]?)
       end
@@ -567,6 +569,7 @@ module Sarif
     private def validate_artifact(artifact : Artifact, path : String,
                                   artifact_index : Int32, artifact_count : Int32,
                                   errors : Array(ValidationError))
+      validate_message_arguments(artifact.description, "#{path}.description", errors)
       if (length = artifact.length) && length < -1
         errors << ValidationError.new(
           "artifact length must be >= -1, got #{length}",
@@ -730,6 +733,7 @@ module Sarif
 
     private def validate_region(region : Region, path : String,
                                 errors : Array(ValidationError))
+      validate_message_arguments(region.message, "#{path}.message", errors)
       # A region SHALL define a text region or a binary region (§3.30.1); the
       # schema requires at least one of startLine, charOffset or byteOffset.
       if region.start_line.nil? && region.char_offset.nil? && region.byte_offset.nil?
@@ -879,6 +883,7 @@ module Sarif
 
     private def validate_graph_traversal(gt : GraphTraversal, path : String,
                                          errors : Array(ValidationError))
+      validate_message_arguments(gt.description, "#{path}.description", errors)
       # Exactly one of the two SHALL be present (§3.42.2).
       if gt.run_graph_index.nil? == gt.result_graph_index.nil?
         errors << ValidationError.new(
@@ -900,6 +905,7 @@ module Sarif
 
     private def validate_graph(graph : Graph, path : String,
                                errors : Array(ValidationError))
+      validate_message_arguments(graph.description, "#{path}.description", errors)
       node_ids = Set(String).new
       if nodes = graph.nodes
         nodes.each_with_index do |node, i|
@@ -917,6 +923,7 @@ module Sarif
 
     private def validate_node(node : Node, path : String, seen_ids : Set(String),
                               errors : Array(ValidationError), *, depth : Int32)
+      validate_message_arguments(node.label, "#{path}.label", errors)
       # Bound recursion through node.children so a malformed SARIF graph
       # with arbitrarily deep child chains can't blow the call stack.
       return unless check_depth!(path, depth, errors)
@@ -946,6 +953,7 @@ module Sarif
 
     private def validate_edge(edge : Edge, path : String, seen_ids : Set(String),
                               node_ids : Set(String), errors : Array(ValidationError))
+      validate_message_arguments(edge.label, "#{path}.label", errors)
       if edge.id.empty?
         errors << ValidationError.new(
           "edge id must not be empty",

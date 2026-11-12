@@ -192,19 +192,31 @@ module Sarif
     #
     # See: [SARIF 2.1.0 §3.52.3](https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html#_Toc34317870)
     def resolve_rule_reference(reference : ReportingDescriptorReference) : ReportingDescriptor?
+      resolve_descriptor_reference(reference, &.rules)
+    end
+
+    # Like `#resolve_rule_reference`, but within the component's
+    # `notifications`, for `notification.descriptor` and
+    # `notificationConfigurationOverrides` (§3.52.3).
+    def resolve_notification_reference(reference : ReportingDescriptorReference) : ReportingDescriptor?
+      resolve_descriptor_reference(reference, &.notifications)
+    end
+
+    private def resolve_descriptor_reference(reference : ReportingDescriptorReference,
+                                             & : ToolComponent -> Array(ReportingDescriptor)?) : ReportingDescriptor?
       component = tool_component_for(reference.tool_component)
       return unless component
-      rules = component.rules
-      return unless rules
+      descriptors = yield component
+      return unless descriptors
 
       if (idx = reference.index) && idx >= 0
-        if descriptor = rules[idx]?
+        if descriptor = descriptors[idx]?
           return descriptor
         end
       end
 
       if guid = reference.guid
-        return rules.find { |r| r.guid == guid }
+        return descriptors.find { |r| r.guid == guid }
       end
 
       nil

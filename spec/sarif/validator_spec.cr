@@ -2302,8 +2302,18 @@ describe Sarif::Validator do
       argument_errors.call(json).should eq(["$.runs[0].invocations[0].toolExecutionNotifications[0].message.arguments"])
     end
 
+    it "resolves notification descriptors by guid after a dangling index, and by id alone" do
+      guid = "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d"
+      head = %({"version":"2.1.0","runs":[{"tool":{"driver":{"name":"T","notifications":[{"id":"N1","guid":"#{guid}","messageStrings":{"m":{"text":"{0} {1}"}}}]}},)
+      [%({"index":5,"guid":"#{guid}"}), %({"id":"N1"})].each do |descriptor|
+        json = head + %("invocations":[{"executionSuccessful":true,"toolExecutionNotifications":[{"descriptor":#{descriptor},"message":{"id":"m","arguments":["x"]}}]}]}]})
+        argument_errors.call(json).size.should eq(1)
+      end
+    end
+
     it "checks nested messages such as location.message" do
       argument_errors.call(wrap.call(%({"message":{"text":"m"},"locations":[{"message":{"text":"{0}"}}]}), "")).should eq(["$.runs[0].results[0].locations[0].message.arguments"])
+      argument_errors.call(wrap.call(%({"message":{"text":"m"},"graphs":[{"nodes":[{"id":"n","label":{"text":"{1}"}}]}]}), "")).should eq(["$.runs[0].results[0].graphs[0].nodes[0].label.arguments"])
     end
   end
 end

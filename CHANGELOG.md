@@ -11,12 +11,13 @@
 ### Added
 
 - `SarifLog#runs!`.
+- `Run#resolve_notification_reference` (§3.52.3 lookup within `notifications`).
 - `Result#effective_rule_id` (`ruleId`, else `rule.id`).
 
 ### Fixed
-- `Validator` and the `valid?` helpers accept an explicit `rank: -1.0` on results and reporting configurations. The schema allows it (`minimum: -1.0`, the "unknown" default); other values outside 0.0-100.0 are still rejected.
-- `Validator` checks the message argument count (§3.11.11): a `{n}` placeholder needs at least n+1 `arguments`. The check covers `text`, `markdown`, and the string `message.id` looks up in the rule's (or notification descriptor's) `messageStrings` or the component's `globalMessageStrings` when it resolves. `{{`/`}}` are escapes (§3.11.5). Result and notification messages are checked, and so are location, codeFlow, threadFlow, stack and fix messages.
 
+- `Validator` and the `valid?` helpers accept an explicit `rank: -1.0` on results and reporting configurations. The schema allows it (`minimum: -1.0`, the "unknown" default); other values outside 0.0-100.0 are still rejected.
+- `Validator` checks the message argument count (§3.11.11): a `{n}` placeholder needs at least n+1 `arguments`. The check covers `text`, `markdown`, and the string `message.id` looks up in the rule's (or notification descriptor's) `messageStrings` or the component's `globalMessageStrings` when it resolves. `{{`/`}}` are escapes (§3.11.5). Result and notification messages are checked, and so are the nested location, region, codeFlow, threadFlow, stack, fix, graph, node, edge, graphTraversal, attachment, artifact and automationDetails messages.
 - A leading UTF-8 byte order mark is ignored by `Sarif.parse`, `Sarif.from_file` and `SarifLog.from_json`, including IOs that deliver it across short reads (RFC 8259 §8.1). Output never contains a BOM.
 - `Validator` rejects a negative `artifact.offset` (schema `minimum: 0`).
 - `Sarif::GUID_PATTERN` (used by `Validator` and `ReportingDescriptor#valid?`) now requires the RFC 4122 version (1-5) and variant (8, 9, a, b) digits, the same pattern as the official schema (§3.5.3). GUIDs such as `22222222-2222-2222-2222-222222222222`, the nil UUID and v6-v8 UUIDs are now rejected.
