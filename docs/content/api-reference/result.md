@@ -73,6 +73,18 @@ result = Sarif::Result.new(message: Sarif::Message.new(text: "test"))
 result.effective_kind   # => Sarif::ResultKind::Fail
 ```
 
+### `#effective_rule_id`
+
+Returns `ruleId`, or `rule.id` when `ruleId` is absent (SARIF §3.27.5 lets a result name its rule with either). The `rule_id:` filters of `results_by_rule_id`, `find_results` and `result_counts_by_rule_id` use it:
+
+```crystal
+result = Sarif::Result.new(
+  message: Sarif::Message.new(text: "test"),
+  rule: Sarif::ReportingDescriptorReference.new(id: "SEC001")
+)
+result.effective_rule_id  # => "SEC001"
+```
+
 ## Related Types
 
 ### Suppression

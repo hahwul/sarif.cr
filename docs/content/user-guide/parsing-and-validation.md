@@ -95,9 +95,11 @@ The validator checks for:
 - **Version** -- Must be `"2.1.0"`
 - **Tool driver name** -- Must not be empty
 - **Result message** -- Must have either `text` or `id`
-- **Rule index** -- `ruleIndex` must reference a valid rule in the tool component named by `rule.toolComponent` (the driver by default)
-- **Rule ID consistency** -- `ruleId` must match the rule at `ruleIndex`
-- **GUID format** -- Must be valid UUID
+- **Rule index** -- `ruleIndex` (or `rule.index`) must reference a valid rule in the tool component named by `rule.toolComponent` (the driver by default)
+- **Rule ID consistency** -- `ruleId` (or `rule.id`) must match the rule at that index
+- **Descriptor references** -- `rule`, `taxa`, notification `descriptor`/`associatedRule` and configuration override `descriptor` must carry at least one of `index`, `guid` or `id`
+- **Kind and level** -- `level` must be `none` when `kind` is not `fail`
+- **GUID format** -- Must be an RFC 4122 UUID (version 1-5, variant `8`/`9`/`a`/`b`), as in the official schema
 - **Timestamp format** -- Must be RFC 3339
 - **URI format** -- Must be absolute URI
 - **Result rank** -- Must be 0.0–100.0
@@ -107,6 +109,7 @@ The validator checks for:
 - **Fix** -- Must have at least one artifact change
 - **Artifact change** -- Must have at least one replacement
 - **Artifact length** -- Must be >= -1
+- **Index-like values** -- `location.id`, thread flow location `index`/`executionOrder` must be >= -1; `nestingLevel` and relationship `target` must be >= 0
 - **Invocation time** -- `endTimeUtc` must be >= `startTimeUtc`
 - **Nesting depth** -- Must not exceed `max_depth`
 

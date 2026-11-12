@@ -2113,4 +2113,100 @@ describe Sarif::Validator do
     result = Sarif::Validator.new.validate(log)
     result.errors.map(&.path).should eq(["$.runs[0].artifacts[0].offset"])
   end
+
+  describe "pass 2026-11-12 regressions" do
+    validate = ->(results : String, extra : String) do
+      json = %({"version": "2.1.0", "runs": [{"tool": {"driver": {"name": "x",
+        "rules": [{"id": "abc/def"}]}}, "results": [#{results}]#{extra}}]})
+      Sarif::Validator.new.validate(Sarif.parse(json)).errors.map { |e| {e.path, e.message} }
+    end
+
+    it "rejects a GUID without an RFC 4122 version and variant (§3.5.3, schema pattern)" do
+      errors = validate.call(%({"message": {"text": "m"}, "guid": "22222222-2222-2222-2222-222222222222"}), "")
+      errors.map(&.[0]).should eq(["$.runs[0].results[0].guid"])
+      validate.call(%({"message": {"text": "m"}, "guid": "11111111-1111-1111-8888-111111111111"}), "").should be_empty
+    end
+
+    it "checks automationDetails and runAggregates GUIDs" do
+      errors = validate.call("", %(, "automationDetails": {"guid": "nope"},
+        "runAggregates": [{"correlationGuid": "nope"}]))
+      errors.map(&.[0]).should eq(["$.runs[0].automationDetails.guid", "$.runs[0].runAggregates[0].correlationGuid"])
+    end
+
+    it "applies the §3.52.4 EXAMPLE to rule.id and rule.index without ruleIndex" do
+      results = [
+        %({"ruleId": "abc/def", "rule": {"index": 0}, "message": {"text": "valid"}}),
+        %({"rule": {"id": "abc/def/ghi", "index": 0}, "message": {"text": "valid"}}),
+        %({"rule": {"id": "abc/defg", "index": 0}, "message": {"text": "invalid prefix"}}),
+        %({"ruleId": "abc/def", "rule": {"id": "abc/def/ghi", "index": 0}, "message": {"text": "invalid: not equal"}}),
+      ].join(",")
+      errors = validate.call(results, "")
+      errors.map(&.[0]).should eq(["$.runs[0].results[2].rule.id", "$.runs[0].results[3].rule.id"])
+    end
+
+    it "rejects a rule.index that addresses no rule" do
+      errors = validate.call(%({"rule": {"index": 3}, "message": {"text": "m"}}), "")
+      errors.should eq([{"$.runs[0].results[0].rule.index", "Invalid rule.index: 3"}])
+    end
+
+    it "reports a rule.index below -1 once" do
+      errors = validate.call(%({"rule": {"index": -2}, "message": {"text": "m"}}), "")
+      errors.map(&.[0]).should eq(["$.runs[0].results[0].rule.index"])
+    end
+
+    it "requires index, guid or id on every reportingDescriptorReference (schema anyOf)" do
+      result = %({"message": {"text": "m"}, "rule": {}, "taxa": [{"toolComponent": {"index": 0}}]})
+      notification = %({"message": {"text": "n"}, "descriptor": {}, "associatedRule": {"guid": "bad"}})
+      extra = %(, "invocations": [{"executionSuccessful": true,
+        "ruleConfigurationOverrides": [{"descriptor": {}, "configuration": {"level": "error"}}],
+        "toolExecutionNotifications": [#{notification}]}])
+      errors = validate.call(result, extra).map(&.[0])
+      errors.should eq([
+        "$.runs[0].results[0].rule",
+        "$.runs[0].results[0].taxa[0]",
+        "$.runs[0].invocations[0].ruleConfigurationOverrides[0].descriptor",
+        "$.runs[0].invocations[0].toolExecutionNotifications[0].descriptor",
+        "$.runs[0].invocations[0].toolExecutionNotifications[0].associatedRule.guid",
+      ])
+    end
+
+    it "requires level none when kind is not fail (§3.27.10)" do
+      results = [
+        %({"kind": "pass", "level": "error", "message": {"text": "m"}}),
+        %({"kind": "pass", "level": "none", "message": {"text": "m"}}),
+        %({"kind": "informational", "message": {"text": "m"}}),
+        %({"kind": "fail", "level": "note", "message": {"text": "m"}}),
+      ].join(",")
+      validate.call(results, "").map(&.[0]).should eq(["$.runs[0].results[0].level"])
+    end
+
+    it "checks schema minimums on locations and thread flow locations" do
+      tfl = %({"index": -2, "nestingLevel": -1, "executionOrder": -2})
+      result = %({"message": {"text": "m"}, "locations": [{"id": -2, "relationships": [{"target": -1}]}],
+        "codeFlows": [{"threadFlows": [{"locations": [#{tfl}]}]}]})
+      errors = validate.call(result, %(, "threadFlowLocations": [{"nestingLevel": -1}])).map(&.[0])
+      errors.should eq([
+        "$.runs[0].results[0].locations[0].id",
+        "$.runs[0].results[0].locations[0].relationships[0].target",
+        "$.runs[0].results[0].codeFlows[0].threadFlows[0].locations[0].index",
+        "$.runs[0].results[0].codeFlows[0].threadFlows[0].locations[0].nestingLevel",
+        "$.runs[0].results[0].codeFlows[0].threadFlows[0].locations[0].executionOrder",
+        "$.runs[0].threadFlowLocations[0].nestingLevel",
+      ])
+      ok = %({"message": {"text": "m"}, "locations": [{"id": -1, "relationships": [{"target": 0}]}]})
+      validate.call(ok, "").should be_empty
+    end
+
+    it "checks workItemUris, hostedViewerUri and deprecatedGuids" do
+      json = %({"version": "2.1.0", "runs": [{"tool": {"driver": {"name": "x",
+        "rules": [{"id": "R", "deprecatedGuids": ["bad"]}]}},
+        "results": [{"message": {"text": "m"}, "workItemUris": ["not a uri"], "hostedViewerUri": "relative/path"}]}]})
+      paths = Sarif::Validator.new.validate(Sarif.parse(json)).errors.map(&.path)
+      paths.should eq([
+        "$.runs[0].tool.driver.rules[0].deprecatedGuids[0]",
+        "$.runs[0].results[0].hostedViewerUri",
+        "$.runs[0].results[0].workItemUris[0]",
+      ])
+    end
+  end
 end

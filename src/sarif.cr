@@ -3,7 +3,10 @@ require "json"
 module Sarif
   VERSION = "0.2.0"
 
-  GUID_PATTERN = /\A[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\z/
+  # A GUID-valued string (SARIF 2.1.0 §3.5.3): an RFC 4122 UUID, whose third
+  # group starts with the version (1-5) and fourth group with the variant
+  # (8, 9, a or b). Same pattern as the official sarif-schema-2.1.0.json.
+  GUID_PATTERN = /\A[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}\z/
 end
 
 # Errors and foundation
