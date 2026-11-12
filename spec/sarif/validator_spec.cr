@@ -389,22 +389,33 @@ describe Sarif::Validator do
     result.errors.any? { |e| e.message.try(&.includes?("rank must be between")) }.should be_true
   end
 
-  it "detects negative rank" do
-    log = Sarif::SarifLog.new(
-      runs: [
-        Sarif::Run.new(
-          tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
-          results: [
-            Sarif::Result.new(
-              message: Sarif::Message.new(text: "issue"),
-              rank: -1.0
-            ),
-          ]
-        ),
-      ]
-    )
+  it "detects negative rank other than -1.0" do
+    [-0.5, -1.5, -100.0].each do |rank|
+      log = Sarif::SarifLog.new(
+        runs: [
+          Sarif::Run.new(
+            tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+            results: [
+              Sarif::Result.new(
+                message: Sarif::Message.new(text: "issue"),
+                rank: rank
+              ),
+            ]
+          ),
+        ]
+      )
+      result = Sarif::Validator.new.validate(log)
+      result.valid?.should be_false
+      result.errors.any?(&.path.ends_with?(".rank")).should be_true
+    end
+  end
+
+  it "accepts an explicit rank of -1.0 (unknown; schema minimum -1.0)" do
+    log = Sarif.parse(%({"version":"2.1.0","runs":[{"tool":{"driver":{"name":"T","rules":[{"id":"R1","defaultConfiguration":{"rank":-1.0}}]}},"results":[{"ruleId":"R1","message":{"text":"m"},"rank":-1.0}]}]}))
     result = Sarif::Validator.new.validate(log)
-    result.valid?.should be_false
+    result.errors.select(&.path.includes?("rank")).should be_empty
+    log.runs![0].results.not_nil![0].valid?.should be_true
+    log.runs![0].tool.driver.rules.not_nil![0].valid?.should be_true
   end
 
   it "detects invalid occurrenceCount" do
@@ -2239,6 +2250,70 @@ describe Sarif::Validator do
         "$.runs[0].results[0].hostedViewerUri",
         "$.runs[0].results[0].workItemUris[0]",
       ])
+    end
+  end
+
+  describe "message arguments (SARIF 2.1.0 §3.11.11)" do
+    argument_errors = ->(json : String) do
+      Sarif::Validator.new.validate(Sarif.parse(json)).errors.select(&.path.ends_with?(".arguments")).map(&.path)
+    end
+    wrap = ->(results : String, extra : String) do
+      %({"version":"2.1.0","runs":[{"tool":{"driver":{"name":"T"#{extra}}},"results":[#{results}]}]})
+    end
+
+    it "requires n+1 arguments for a {n} placeholder in text or markdown" do
+      argument_errors.call(wrap.call(%({"message":{"text":"a {0} b {1}","arguments":["x"]}}), "")).should eq(["$.runs[0].results[0].message.arguments"])
+      argument_errors.call(wrap.call(%({"message":{"text":"a {0}"}}), "")).should eq(["$.runs[0].results[0].message.arguments"])
+      argument_errors.call(wrap.call(%({"message":{"text":"a {0}","markdown":"**{2}**","arguments":["x","y"]}}), "")).size.should eq(1)
+      argument_errors.call(wrap.call(%({"message":{"text":"a {1} {0} {1}","arguments":["x","y"]}}), "")).should be_empty
+    end
+
+    it "treats {{ and }} as escaped braces, not placeholders" do
+      argument_errors.call(wrap.call(%({"message":{"text":"literal {{0}} and {{{0}}}","arguments":["x"]}}), "")).should be_empty
+      argument_errors.call(wrap.call(%({"message":{"text":"literal {{0}} only"}}), "")).should be_empty
+      argument_errors.call(wrap.call(%({"message":{"text":"not placeholders: {} {x} {-1} {0"}}), "")).should be_empty
+      argument_errors.call(wrap.call(%({"message":{"text":"{{{1}}}","arguments":["x"]}}), "")).size.should eq(1)
+    end
+
+    it "counts the string message.id names in the rule's messageStrings" do
+      rules = %(,"rules":[{"id":"R1","messageStrings":{"m":{"text":"{0}: {1}"}}}])
+      argument_errors.call(wrap.call(%({"ruleId":"R1","ruleIndex":0,"message":{"id":"m","arguments":["x"]}}), rules)).size.should eq(1)
+      argument_errors.call(wrap.call(%({"ruleId":"R1","message":{"id":"m","arguments":["x"]}}), rules)).size.should eq(1)
+      argument_errors.call(wrap.call(%({"ruleId":"R1","message":{"id":"m","arguments":["x","y"]}}), rules)).should be_empty
+      # text does not exempt the id string (§3.11.11 "any of ... text, markdown, or id")
+      argument_errors.call(wrap.call(%({"ruleId":"R1","message":{"text":"done","id":"m"}}), rules)).size.should eq(1)
+    end
+
+    it "falls back to globalMessageStrings and ignores ids it cannot resolve" do
+      global = %(,"globalMessageStrings":{"g":{"text":"x","markdown":"{3}"}})
+      argument_errors.call(wrap.call(%({"message":{"id":"g","arguments":["a","b","c"]}}), global)).size.should eq(1)
+      argument_errors.call(wrap.call(%({"message":{"id":"g","arguments":["a","b","c","d"]}}), global)).should be_empty
+      argument_errors.call(wrap.call(%({"message":{"id":"missing"}}), global)).should be_empty
+    end
+
+    it "prefers the rule's messageStrings over globalMessageStrings" do
+      extra = %(,"rules":[{"id":"R1","messageStrings":{"m":{"text":"{0}"}}}],"globalMessageStrings":{"m":{"text":"{5}"}})
+      argument_errors.call(wrap.call(%({"ruleId":"R1","message":{"id":"m","arguments":["x"]}}), extra)).should be_empty
+    end
+
+    it "checks notification messages against the descriptor's messageStrings" do
+      json = %({"version":"2.1.0","runs":[{"tool":{"driver":{"name":"T","notifications":[{"id":"N1","messageStrings":{"m":{"text":"{0} {1}"}}}]}},) +
+             %("invocations":[{"executionSuccessful":true,"toolExecutionNotifications":[{"descriptor":{"index":0},"message":{"id":"m","arguments":["x"]}}]}]}]})
+      argument_errors.call(json).should eq(["$.runs[0].invocations[0].toolExecutionNotifications[0].message.arguments"])
+    end
+
+    it "resolves notification descriptors by guid after a dangling index, and by id alone" do
+      guid = "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d"
+      head = %({"version":"2.1.0","runs":[{"tool":{"driver":{"name":"T","notifications":[{"id":"N1","guid":"#{guid}","messageStrings":{"m":{"text":"{0} {1}"}}}]}},)
+      [%({"index":5,"guid":"#{guid}"}), %({"id":"N1"})].each do |descriptor|
+        json = head + %("invocations":[{"executionSuccessful":true,"toolExecutionNotifications":[{"descriptor":#{descriptor},"message":{"id":"m","arguments":["x"]}}]}]}]})
+        argument_errors.call(json).size.should eq(1)
+      end
+    end
+
+    it "checks nested messages such as location.message" do
+      argument_errors.call(wrap.call(%({"message":{"text":"m"},"locations":[{"message":{"text":"{0}"}}]}), "")).should eq(["$.runs[0].results[0].locations[0].message.arguments"])
+      argument_errors.call(wrap.call(%({"message":{"text":"m"},"graphs":[{"nodes":[{"id":"n","label":{"text":"{1}"}}]}]}), "")).should eq(["$.runs[0].results[0].graphs[0].nodes[0].label.arguments"])
     end
   end
 end

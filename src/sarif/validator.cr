@@ -90,7 +90,7 @@ module Sarif
       validate_enum(run.column_kind, "#{path}.columnKind", errors)
 
       run.invocations.try &.each_with_index do |inv, j|
-        validate_invocation(inv, "#{path}.invocations[#{j}]", errors, depth: depth)
+        validate_invocation(inv, run, "#{path}.invocations[#{j}]", errors, depth: depth)
       end
 
       run.artifacts.try &.each_with_index do |artifact, j|
@@ -125,6 +125,7 @@ module Sarif
 
     private def validate_automation_details(details : RunAutomationDetails, path : String,
                                             errors : Array(ValidationError))
+      validate_message_arguments(details.description, "#{path}.description", errors)
       validate_guid(details.guid, "#{path}.guid", errors)
       validate_guid(details.correlation_guid, "#{path}.correlationGuid", errors)
     end
@@ -195,6 +196,11 @@ module Sarif
           "#{path}.message"
         )
       end
+      validate_message_arguments(result.message, "#{path}.message", errors) do |id|
+        component = run.tool_component_for(result.rule.try(&.tool_component))
+        result.resolve_rule(run).try(&.message_strings).try(&.[id]?) ||
+          component.try(&.global_message_strings).try(&.[id]?)
+      end
 
       validate_result_rule(result, run, path, errors)
 
@@ -224,9 +230,9 @@ module Sarif
       validate_guid(result.guid, "#{path}.guid", errors)
       validate_guid(result.correlation_guid, "#{path}.correlationGuid", errors)
 
-      if (rank = result.rank) && (rank < 0.0 || rank > 100.0)
+      if (rank = result.rank) && !Sarif.valid_rank?(rank)
         errors << ValidationError.new(
-          "rank must be between 0.0 and 100.0, got #{rank}",
+          "rank must be between 0.0 and 100.0 (or -1.0 for unknown), got #{rank}",
           "#{path}.rank"
         )
       end
@@ -264,6 +270,10 @@ module Sarif
 
       result.fixes.try &.each_with_index do |fix, k|
         validate_fix(fix, "#{path}.fixes[#{k}]", errors)
+      end
+
+      result.attachments.try &.each_with_index do |attachment, k|
+        validate_message_arguments(attachment.description, "#{path}.attachments[#{k}].description", errors)
       end
 
       result.suppressions.try &.each_with_index do |suppression, k|
@@ -381,6 +391,65 @@ module Sarif
       end
     end
 
+    # §3.11.11: `arguments` SHALL have as many elements as the highest
+    # placeholder index (§3.11.5) among the message strings given by `text`,
+    # `markdown` and `id` requires. The block looks `id` up (§3.11.7) and
+    # returns nil when it cannot be resolved; then only `text` and `markdown`
+    # are checked. §3.11.7 consults a descriptor's messageStrings only for
+    # `result.message` and `notification.message`; other messages are checked
+    # without an id lookup.
+    private def validate_message_arguments(message : Message?, path : String,
+                                           errors : Array(ValidationError), & : String -> MultiformatMessageString?)
+      return unless message
+      strings = [message.text, message.markdown]
+      if (id = message.id) && (looked_up = yield id)
+        strings << looked_up.text << looked_up.markdown
+      end
+      max = strings.compact_map { |str| str.try { |text| max_placeholder(text) } }.max?
+      return unless max
+      count = message.arguments.try(&.size) || 0
+      return if max < count
+      errors << ValidationError.new(
+        "message uses placeholder {#{max}} but arguments has #{count} element(s)",
+        "#{path}.arguments"
+      )
+    end
+
+    private def validate_message_arguments(message : Message?, path : String, errors : Array(ValidationError))
+      validate_message_arguments(message, path, errors) { nil }
+    end
+
+    # The highest placeholder index (`{n}`, §3.11.5) in `str`, or nil when it
+    # has none. `{{` is an escaped literal brace, so `{{0}}` is the text `{0}`,
+    # not a placeholder. An index too large for UInt64 counts as UInt64::MAX.
+    private def max_placeholder(str : String) : UInt64?
+      bytes = str.to_slice
+      max = nil
+      i = 0
+      while i < bytes.size
+        unless bytes[i] == '{'.ord
+          i += 1
+          next
+        end
+        if bytes[i + 1]? == '{'.ord
+          i += 2
+          next
+        end
+        j = i + 1
+        while j < bytes.size && bytes[j].unsafe_chr.ascii_number?
+          j += 1
+        end
+        if j > i + 1 && bytes[j]? == '}'.ord
+          n = str.byte_slice(i + 1, j - i - 1).to_u64? || UInt64::MAX
+          max = n if max.nil? || n > max
+          i = j + 1
+        else
+          i += 1
+        end
+      end
+      max
+    end
+
     private def validate_suppression(suppression : Suppression, path : String,
                                      errors : Array(ValidationError))
       validate_enum(suppression.kind, "#{path}.kind", errors)
@@ -422,7 +491,7 @@ module Sarif
       end
     end
 
-    private def validate_invocation(inv : Invocation, path : String,
+    private def validate_invocation(inv : Invocation, run : Run, path : String,
                                     errors : Array(ValidationError), *, depth : Int32)
       validate_timestamp(inv.start_time_utc, "#{path}.startTimeUtc", errors)
       validate_timestamp(inv.end_time_utc, "#{path}.endTimeUtc", errors)
@@ -445,11 +514,11 @@ module Sarif
       end
 
       inv.tool_execution_notifications.try &.each_with_index do |notif, i|
-        validate_notification(notif, "#{path}.toolExecutionNotifications[#{i}]", errors, depth: depth + 1)
+        validate_notification(notif, run, "#{path}.toolExecutionNotifications[#{i}]", errors, depth: depth + 1)
       end
 
       inv.tool_configuration_notifications.try &.each_with_index do |notif, i|
-        validate_notification(notif, "#{path}.toolConfigurationNotifications[#{i}]", errors, depth: depth + 1)
+        validate_notification(notif, run, "#{path}.toolConfigurationNotifications[#{i}]", errors, depth: depth + 1)
       end
     end
 
@@ -459,13 +528,23 @@ module Sarif
       validate_reporting_configuration(override.configuration, "#{path}.configuration", errors)
     end
 
-    private def validate_notification(notif : Notification, path : String,
+    private def validate_notification(notif : Notification, run : Run, path : String,
                                       errors : Array(ValidationError), *, depth : Int32)
       if notif.message.text.nil? && notif.message.id.nil?
         errors << ValidationError.new(
           "Notification message must have either text or id",
           "#{path}.message"
         )
+      end
+      validate_message_arguments(notif.message, "#{path}.message", errors) do |id|
+        reference = notif.descriptor
+        component = run.tool_component_for(reference.try(&.tool_component))
+        # §3.52.3 lookup, then the same id fallback `Result#resolve_rule` uses
+        # (sarif-sdk style descriptors carry only an id).
+        descriptor = reference.try { |ref| run.resolve_notification_reference(ref) } ||
+                     reference.try(&.id).try { |rid| component.try(&.notifications).try &.find { |d| d.id == rid } }
+        descriptor.try(&.message_strings).try(&.[id]?) ||
+          component.try(&.global_message_strings).try(&.[id]?)
       end
 
       validate_enum(notif.level, "#{path}.level", errors)
@@ -490,6 +569,7 @@ module Sarif
     private def validate_artifact(artifact : Artifact, path : String,
                                   artifact_index : Int32, artifact_count : Int32,
                                   errors : Array(ValidationError))
+      validate_message_arguments(artifact.description, "#{path}.description", errors)
       if (length = artifact.length) && length < -1
         errors << ValidationError.new(
           "artifact length must be >= -1, got #{length}",
@@ -543,6 +623,7 @@ module Sarif
     end
 
     private def validate_code_flow(code_flow : CodeFlow, path : String, errors : Array(ValidationError))
+      validate_message_arguments(code_flow.message, "#{path}.message", errors)
       if code_flow.thread_flows.empty?
         errors << ValidationError.new(
           "codeFlow must have at least one threadFlow",
@@ -551,6 +632,7 @@ module Sarif
       end
 
       code_flow.thread_flows.each_with_index do |tf, i|
+        validate_message_arguments(tf.message, "#{path}.threadFlows[#{i}].message", errors)
         if tf.locations.empty?
           errors << ValidationError.new(
             "threadFlow must have at least one location",
@@ -580,6 +662,7 @@ module Sarif
     end
 
     private def validate_fix(fix : Fix, path : String, errors : Array(ValidationError))
+      validate_message_arguments(fix.description, "#{path}.description", errors)
       if fix.artifact_changes.empty?
         errors << ValidationError.new(
           "fix must have at least one artifactChange",
@@ -608,6 +691,7 @@ module Sarif
     private def validate_location(location : Location, path : String,
                                   errors : Array(ValidationError))
       validate_min(location.id, NO_INDEX, "#{path}.id", "location id", errors)
+      validate_message_arguments(location.message, "#{path}.message", errors)
       location.relationships.try &.each_with_index do |relationship, i|
         validate_min(relationship.target, 0, "#{path}.relationships[#{i}].target", "target", errors)
       end
@@ -649,6 +733,7 @@ module Sarif
 
     private def validate_region(region : Region, path : String,
                                 errors : Array(ValidationError))
+      validate_message_arguments(region.message, "#{path}.message", errors)
       # A region SHALL define a text region or a binary region (§3.30.1); the
       # schema requires at least one of startLine, charOffset or byteOffset.
       if region.start_line.nil? && region.char_offset.nil? && region.byte_offset.nil?
@@ -798,6 +883,7 @@ module Sarif
 
     private def validate_graph_traversal(gt : GraphTraversal, path : String,
                                          errors : Array(ValidationError))
+      validate_message_arguments(gt.description, "#{path}.description", errors)
       # Exactly one of the two SHALL be present (§3.42.2).
       if gt.run_graph_index.nil? == gt.result_graph_index.nil?
         errors << ValidationError.new(
@@ -809,6 +895,7 @@ module Sarif
 
     private def validate_stack(stack : Stack, path : String,
                                errors : Array(ValidationError))
+      validate_message_arguments(stack.message, "#{path}.message", errors)
       stack.frames.each_with_index do |frame, i|
         if location = frame.location
           validate_location(location, "#{path}.frames[#{i}].location", errors)
@@ -818,6 +905,7 @@ module Sarif
 
     private def validate_graph(graph : Graph, path : String,
                                errors : Array(ValidationError))
+      validate_message_arguments(graph.description, "#{path}.description", errors)
       node_ids = Set(String).new
       if nodes = graph.nodes
         nodes.each_with_index do |node, i|
@@ -835,6 +923,7 @@ module Sarif
 
     private def validate_node(node : Node, path : String, seen_ids : Set(String),
                               errors : Array(ValidationError), *, depth : Int32)
+      validate_message_arguments(node.label, "#{path}.label", errors)
       # Bound recursion through node.children so a malformed SARIF graph
       # with arbitrarily deep child chains can't blow the call stack.
       return unless check_depth!(path, depth, errors)
@@ -864,6 +953,7 @@ module Sarif
 
     private def validate_edge(edge : Edge, path : String, seen_ids : Set(String),
                               node_ids : Set(String), errors : Array(ValidationError))
+      validate_message_arguments(edge.label, "#{path}.label", errors)
       if edge.id.empty?
         errors << ValidationError.new(
           "edge id must not be empty",
@@ -907,9 +997,9 @@ module Sarif
                                                  errors : Array(ValidationError))
       validate_enum(config.level, "#{path}.level", errors)
 
-      if (rank = config.rank) && (rank < 0.0 || rank > 100.0)
+      if (rank = config.rank) && !Sarif.valid_rank?(rank)
         errors << ValidationError.new(
-          "rank must be between 0.0 and 100.0, got #{rank}",
+          "rank must be between 0.0 and 100.0 (or -1.0 for unknown), got #{rank}",
           "#{path}.rank"
         )
       end
