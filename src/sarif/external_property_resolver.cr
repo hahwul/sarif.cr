@@ -38,8 +38,9 @@ module Sarif
               raise Error.new("#{ref_path}.itemCount is #{count}, but the external array contains #{values.size} item(s)")
             end
             entries = entries ? entries.concat(values) : values.dup
+            # The next part can name its file by an index populated here.
+            {{owner}}.{{property.id}} = entries
           end
-          {{owner}}.{{property.id}} = entries
         end
       {% end %}
 

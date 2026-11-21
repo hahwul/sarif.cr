@@ -1,6 +1,82 @@
 require "../spec_helper"
 
 describe Sarif::Validator do
+  it "reports dangling indexes when the run arrays are absent or empty" do
+    ["", %(,"artifacts":[],"logicalLocations":[],"invocations":[])].each do |arrays|
+      json = <<-JSON
+        {"version":"2.1.0","runs":[{"tool":{"driver":{"name":"T"}}#{arrays},"results":[{
+          "message":{"text":"m"},"provenance":{"invocationIndex":0},
+          "locations":[{"physicalLocation":{"artifactLocation":{"index":0}},"logicalLocations":[{"index":0}]}]
+        }]}]}
+        JSON
+      expect_raises(Sarif::ParseError) do
+        Sarif.parse!(json)
+      end.validation_errors.map(&.path).sort.should eq([
+        "$.runs[0].results[0].locations[0].logicalLocations[0].index",
+        "$.runs[0].results[0].locations[0].physicalLocation.artifactLocation.index",
+        "$.runs[0].results[0].provenance.invocationIndex",
+      ])
+    end
+  end
+
+  it "checks bounds after external arrays are resolved" do
+    source = Sarif.parse!(<<-JSON)
+      {"version":"2.1.0","inlineExternalProperties":[{"artifacts":[],"logicalLocations":[],"invocations":[]}],
+       "runs":[{"tool":{"driver":{"name":"T"}},"externalPropertyFileReferences":{
+        "artifacts":[{"location":{"uri":"sarif:/inlineExternalProperties/0"}}],
+        "logicalLocations":[{"location":{"uri":"sarif:/inlineExternalProperties/0"}}],
+        "invocations":[{"location":{"uri":"sarif:/inlineExternalProperties/0"}}]},
+       "results":[{"message":{"text":"m"},"provenance":{"invocationIndex":0},
+        "locations":[{"physicalLocation":{"artifactLocation":{"index":0}},"logicalLocations":[{"index":0}]}]}]}]}
+      JSON
+    Sarif::Validator.new.validate(source.resolve_external_properties).errors.map(&.path).sort.should eq([
+      "$.runs[0].results[0].locations[0].logicalLocations[0].index",
+      "$.runs[0].results[0].locations[0].physicalLocation.artifactLocation.index",
+      "$.runs[0].results[0].provenance.invocationIndex",
+    ])
+  end
+
+  it "checks artifact and logical location indexes in nested SARIF objects" do
+    json = <<-JSON
+      {"version":"2.1.0","runs":[{"tool":{"driver":{"name":"T"}},"artifacts":[{"location":{"uri":"a.cr"}}],
+        "invocations":[{"executionSuccessful":true,"toolExecutionNotifications":[{"message":{"text":"n"},
+          "locations":[{"logicalLocations":[{"index":0}]}]}]}],
+        "results":[{"message":{"text":"m"},"attachments":[{"artifactLocation":{"index":1}}],
+          "codeFlows":[{"threadFlows":[{"locations":[{"location":{"physicalLocation":{"artifactLocation":{"index":1}}}}]}]}]}]}]}
+      JSON
+    Sarif::Validator.new.validate(Sarif.parse(json)).errors.map(&.path).sort.should eq([
+      "$.runs[0].invocations[0].toolExecutionNotifications[0].locations[0].logicalLocations[0].index",
+      "$.runs[0].results[0].attachments[0].artifactLocation.index",
+      "$.runs[0].results[0].codeFlows[0].threadFlows[0].locations[0].location.physicalLocation.artifactLocation.index",
+    ])
+  end
+
+  it "checks that a result's rule GUID and index identify the same descriptor" do
+    json = <<-JSON
+      {"version":"2.1.0","runs":[{"tool":{"driver":{"name":"T","rules":[
+        {"id":"A","guid":"a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d"},
+        {"id":"B","guid":"b1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d"}]}},"results":[
+        {"ruleIndex":0,"rule":{"guid":"B1B2C3D4-E5F6-4A7B-8C9D-0E1F2A3B4C5D"},"message":{"text":"conflict"}},
+        {"rule":{"index":1,"guid":"B1B2C3D4-E5F6-4A7B-8C9D-0E1F2A3B4C5D"},"message":{"text":"valid"}}
+      ]}]}
+      JSON
+    Sarif::Validator.new.validate(Sarif.parse(json)).errors.map(&.path).should eq(["$.runs[0].results[0].rule.guid"])
+  end
+
+  it "validates the resolution and ID of a GUID-only result rule reference" do
+    json = <<-JSON
+      {"version":"2.1.0","runs":[{"tool":{"driver":{"name":"T","rules":[
+        {"id":"A","guid":"a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d"}]}},"results":[
+        {"rule":{"guid":"B1B2C3D4-E5F6-4A7B-8C9D-0E1F2A3B4C5D"},"message":{"text":"missing"}},
+        {"ruleId":"B","rule":{"guid":"A1B2C3D4-E5F6-4A7B-8C9D-0E1F2A3B4C5D"},"message":{"text":"wrong ID"}},
+        {"rule":{"id":"A/variant","guid":"A1B2C3D4-E5F6-4A7B-8C9D-0E1F2A3B4C5D"},"message":{"text":"valid"}}
+      ]}]}
+      JSON
+    Sarif::Validator.new.validate(Sarif.parse(json)).errors.map(&.path).should eq([
+      "$.runs[0].results[0].rule.guid", "$.runs[0].results[1].ruleId",
+    ])
+  end
+
   it "accepts the SARIF date/time forms and reports invalid dates at their fields" do
     valid_json = <<-JSON
       {"version":"2.1.0","runs":[{"tool":{"driver":{"name":"T","releaseDateUtc":"2024-02-29"}},
@@ -1556,7 +1632,7 @@ describe Sarif::Validator do
 
   # --- Edge validation with edges-only graph ---
 
-  it "allows edges-only graph without nodes" do
+  it "rejects edges in a graph without nodes" do
     log = Sarif::SarifLog.new(
       runs: [
         Sarif::Run.new(
@@ -1570,7 +1646,7 @@ describe Sarif::Validator do
       ]
     )
     result = Sarif::Validator.new.validate(log)
-    result.valid?.should be_true
+    result.errors.map(&.path).should eq(["$.runs[0].graphs[0].edges[0].sourceNodeId", "$.runs[0].graphs[0].edges[0].targetNodeId"])
   end
 
   # --- Duplicate rule IDs in extensions ---

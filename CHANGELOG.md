@@ -18,6 +18,12 @@
 
 ### Fixed
 
+- Runs can omit the inline driver when `externalPropertyFileReferences.driver` supplies it. Rule lookup validation uses external tool metadata after resolution (§3.15.3, §3.52.3).
+- An artifact part can refer to its file by an index introduced by an earlier external artifact part (§3.4.5, §3.15.2).
+- `Validator` reports an unresolved result rule GUID and validates the rule ID against the descriptor found by GUID (§3.52.4, §3.52.6).
+- Severity queries apply the sole invocation's rule configuration overrides when `provenance.invocationIndex` is omitted (§3.48.6).
+- Tool-component and reporting-descriptor lookups compare GUIDs case-insensitively. Validation reports a result rule GUID that conflicts with its index (§3.5.3, §3.52.2).
+- `Validator` reports dangling artifact, logical location, and invocation indexes even when their arrays are absent or empty. It also rejects graph edges whose endpoints are missing (§3.4.5, §3.33.3, §3.41, §3.48.6).
 - `Run` preserves an explicit `"results": null` on round-trip (§3.14.23).
 - `Validator` accepts SARIF date-only and minute-precision timestamps, handles end-of-day midnight and leap seconds, and compares fractional seconds at their original precision (§3.9).
 - `Validator` checks graph traversal indexes, edge IDs and step counts, plus previously skipped constraints in attachments, artifact locations, provenance, tool components and external property references.

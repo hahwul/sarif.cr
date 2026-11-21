@@ -304,15 +304,15 @@ describe Sarif::Run do
       run.tool_component_for(Sarif::ToolComponentReference.new(index: 3)).should be_nil
     end
 
-    it "selects a component by guid" do
-      guid = "11111111-2222-3333-4444-555555555555"
+    it "selects a component by guid regardless of hex letter case" do
+      guid = "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d"
       run = Sarif::Run.new(
         tool: Sarif::Tool.new(
           driver: Sarif::ToolComponent.new(name: "Driver"),
           extensions: [Sarif::ToolComponent.new(name: "Plugin", guid: guid)]
         )
       )
-      run.tool_component_for(Sarif::ToolComponentReference.new(guid: guid)).not_nil!.name.should eq("Plugin")
+      run.tool_component_for(Sarif::ToolComponentReference.new(guid: guid.upcase)).not_nil!.name.should eq("Plugin")
     end
   end
 
@@ -342,7 +342,7 @@ describe Sarif::Run do
           ])
         )
       )
-      run.resolve_rule_reference(Sarif::ReportingDescriptorReference.new(guid: guid)).not_nil!.id.should eq("R1")
+      run.resolve_rule_reference(Sarif::ReportingDescriptorReference.new(guid: guid.upcase)).not_nil!.id.should eq("R1")
     end
 
     # §3.52.4 NOTE: id "does not participate in the lookup"; §3.52.1: a
