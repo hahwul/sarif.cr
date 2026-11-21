@@ -13,9 +13,9 @@ module Sarif
   # validator = Sarif::Validator.new(max_runs: 10, max_results: 1000, max_depth: 50)
   # ```
   class Validator
-    private GUID_PATTERN    = Sarif::GUID_PATTERN
-    private RFC3339_PATTERN = /\A\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})\z/
-    private URI_PATTERN     = /\A[a-zA-Z][a-zA-Z0-9+\-.]*:/
+    private GUID_PATTERN      = Sarif::GUID_PATTERN
+    private TIMESTAMP_PATTERN = /\A(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d+))?)?(Z|[+-]\d{2}:\d{2}))?\z/
+    private URI_PATTERN       = /\A[a-zA-Z][a-zA-Z0-9+\-.]*:/
 
     # The sentinel every index-valued property in the SARIF 2.1.0 schema uses
     # for "no referent": `ruleIndex`, `parentIndex`, `artifactLocation.index`
@@ -35,6 +35,16 @@ module Sarif
       errors = [] of ValidationError
 
       validate_version(log, errors)
+      validate_uri(log.schema, "$.$schema", errors)
+      log.inline_external_properties.try &.each_with_index do |external, i|
+        path = "$.inlineExternalProperties[#{i}]"
+        validate_guid(external.guid, "#{path}.guid", errors)
+        validate_guid(external.run_guid, "#{path}.runGuid", errors)
+        validate_uri(external.schema, "#{path}.$schema", errors)
+        if (version = external.version) && version != log.version
+          errors << ValidationError.new("External properties version must match the log version", "#{path}.version")
+        end
+      end
       if runs = log.runs
         validate_array_limit(runs, max_runs, "$.runs", "runs", errors)
       end
@@ -73,6 +83,29 @@ module Sarif
       return unless check_depth!(path, depth, errors)
 
       validate_tool(run.tool, "#{path}.tool", errors)
+      {% for field in %w(taxonomies translations policies) %}
+        run.{{field.id}}.try &.each_with_index do |component, i|
+          validate_tool_component(component, "#{path}.{{field.id}}[#{i}]", errors)
+        end
+      {% end %}
+      if sequences = run.newline_sequences
+        if sequences.empty?
+          errors << ValidationError.new("newlineSequences must contain at least one sequence", "#{path}.newlineSequences")
+        end
+        validate_unique_values(sequences, "#{path}.newlineSequences", errors)
+      end
+      validate_unique_values(run.redaction_tokens, "#{path}.redactionTokens", errors)
+
+      if conversion = run.conversion
+        validate_tool(conversion.tool, "#{path}.conversion.tool", errors)
+        if invocation = conversion.invocation
+          validate_invocation(invocation, Run.new(tool: conversion.tool), "#{path}.conversion.invocation", errors, depth: depth)
+        end
+        conversion.analysis_tool_log_files.try &.each_with_index do |location, i|
+          validate_artifact_location(location, "#{path}.conversion.analysisToolLogFiles[#{i}]", errors)
+        end
+      end
+      validate_artifact_location(run.special_locations.try(&.display_base), "#{path}.specialLocations.displayBase", errors)
 
       if results = run.results
         validate_array_limit(results, max_results, "#{path}.results", "results", errors)
@@ -80,10 +113,16 @@ module Sarif
 
       artifact_count = run.artifacts.try(&.size) || 0
       logical_location_count = run.logical_locations.try(&.size) || 0
+      if refs = run.external_property_file_references
+        # These arrays may extend past the data already in the root document.
+        artifact_count = 0 if refs.artifacts.try(&.empty?) == false
+        logical_location_count = 0 if refs.logical_locations.try(&.empty?) == false
+      end
 
+      graph_edge_ids = {} of Graph => Set(String)
       run.results.try &.each_with_index do |result, j|
         result_path = "#{path}.results[#{j}]"
-        validate_result(result, run, result_path, errors, depth: depth + 1)
+        validate_result(result, run, result_path, errors, graph_edge_ids, depth: depth + 1)
         validate_result_index_references(result, result_path, artifact_count, logical_location_count, errors)
       end
 
@@ -107,6 +146,19 @@ module Sarif
 
       run.thread_flow_locations.try &.each_with_index do |tfl, j|
         validate_thread_flow_location(tfl, "#{path}.threadFlowLocations[#{j}]", errors)
+      end
+
+      run.addresses.try &.each_with_index do |address, j|
+        validate_address(address, "#{path}.addresses[#{j}]", errors)
+      end
+      run.logical_locations.try &.each_with_index do |location, j|
+        validate_logical_location(location, "#{path}.logicalLocations[#{j}]", errors)
+      end
+      run.web_requests.try &.each_with_index do |request, j|
+        validate_min(request.index, NO_INDEX, "#{path}.webRequests[#{j}].index", "index", errors)
+      end
+      run.web_responses.try &.each_with_index do |response, j|
+        validate_min(response.index, NO_INDEX, "#{path}.webResponses[#{j}].index", "index", errors)
       end
 
       if refs = run.external_property_file_references
@@ -150,7 +202,21 @@ module Sarif
       validate_guid(component.guid, "#{path}.guid", errors)
       validate_uri(component.download_uri, "#{path}.downloadUri", errors)
       validate_uri(component.information_uri, "#{path}.informationUri", errors)
+      validate_timestamp(component.release_date_utc, "#{path}.releaseDateUtc", errors)
+      validate_tool_component_reference(component.associated_component, "#{path}.associatedComponent", errors)
 
+      component.supported_taxonomies.try &.each_with_index do |taxonomy, i|
+        validate_tool_component_reference(taxonomy, "#{path}.supportedTaxonomies[#{i}]", errors)
+      end
+      component.locations.try &.each_with_index do |location, i|
+        validate_artifact_location(location, "#{path}.locations[#{i}]", errors)
+      end
+      if metadata = component.translation_metadata
+        validate_uri(metadata.download_uri, "#{path}.translationMetadata.downloadUri", errors)
+        validate_uri(metadata.information_uri, "#{path}.translationMetadata.informationUri", errors)
+      end
+
+      validate_unique_values(component.contents, "#{path}.contents", errors)
       component.contents.try &.each_with_index do |content, i|
         validate_enum(content, "#{path}.contents[#{i}]", errors)
       end
@@ -167,6 +233,10 @@ module Sarif
         notifs.each_with_index do |notif, i|
           validate_reporting_descriptor(notif, "#{path}.notifications[#{i}]", errors)
         end
+      end
+
+      component.taxa.try &.each_with_index do |taxon, i|
+        validate_reporting_descriptor(taxon, "#{path}.taxa[#{i}]", errors)
       end
     end
 
@@ -187,11 +257,12 @@ module Sarif
 
       descriptor.relationships.try &.each_with_index do |relationship, i|
         validate_descriptor_reference(relationship.target, "#{path}.relationships[#{i}].target", errors)
+        validate_message_arguments(relationship.description, "#{path}.relationships[#{i}].description", errors)
       end
     end
 
     private def validate_result(result : Result, run : Run, path : String,
-                                errors : Array(ValidationError), *, depth : Int32)
+                                errors : Array(ValidationError), graph_edge_ids : Hash(Graph, Set(String)), *, depth : Int32)
       return unless check_depth!(path, depth, errors)
 
       if result.message.text.nil? && result.message.id.nil?
@@ -233,6 +304,9 @@ module Sarif
 
       validate_guid(result.guid, "#{path}.guid", errors)
       validate_guid(result.correlation_guid, "#{path}.correlationGuid", errors)
+      validate_artifact_location(result.analysis_target, "#{path}.analysisTarget", errors)
+      validate_min(result.web_request.try(&.index), NO_INDEX, "#{path}.webRequest.index", "index", errors)
+      validate_min(result.web_response.try(&.index), NO_INDEX, "#{path}.webResponse.index", "index", errors)
 
       if (rank = result.rank) && !Sarif.valid_rank?(rank)
         errors << ValidationError.new(
@@ -265,7 +339,7 @@ module Sarif
       end
 
       result.graph_traversals.try &.each_with_index do |gt, k|
-        validate_graph_traversal(gt, "#{path}.graphTraversals[#{k}]", errors)
+        validate_graph_traversal(gt, run, result, "#{path}.graphTraversals[#{k}]", errors, graph_edge_ids)
       end
 
       result.stacks.try &.each_with_index do |stack, k|
@@ -277,7 +351,15 @@ module Sarif
       end
 
       result.attachments.try &.each_with_index do |attachment, k|
-        validate_message_arguments(attachment.description, "#{path}.attachments[#{k}].description", errors)
+        attachment_path = "#{path}.attachments[#{k}]"
+        validate_message_arguments(attachment.description, "#{attachment_path}.description", errors)
+        validate_artifact_location(attachment.artifact_location, "#{attachment_path}.artifactLocation", errors)
+        attachment.regions.try &.each_with_index do |region, i|
+          validate_region(region, "#{attachment_path}.regions[#{i}]", errors)
+        end
+        attachment.rectangles.try &.each_with_index do |rectangle, i|
+          validate_message_arguments(rectangle.message, "#{attachment_path}.rectangles[#{i}].message", errors)
+        end
       end
 
       result.suppressions.try &.each_with_index do |suppression, k|
@@ -382,16 +464,29 @@ module Sarif
       validate_min(reference.index, NO_INDEX, "#{path}.index", "index", errors)
       validate_guid(reference.guid, "#{path}.guid", errors)
 
-      if component = reference.tool_component
-        validate_min(component.index, NO_INDEX, "#{path}.toolComponent.index", "index", errors)
-        validate_guid(component.guid, "#{path}.toolComponent.guid", errors)
-      end
+      validate_tool_component_reference(reference.tool_component, "#{path}.toolComponent", errors)
+    end
+
+    private def validate_tool_component_reference(reference : ToolComponentReference?, path : String, errors : Array(ValidationError))
+      return unless reference
+      validate_min(reference.index, NO_INDEX, "#{path}.index", "index", errors)
+      validate_guid(reference.guid, "#{path}.guid", errors)
     end
 
     private def validate_min(value : Int?, min : Int, path : String, name : String,
                              errors : Array(ValidationError))
       if value && value < min
         errors << ValidationError.new("#{name} must be >= #{min}, got #{value}", path)
+      end
+    end
+
+    private def validate_unique_values(values : Array(T)?, path : String, errors : Array(ValidationError)) forall T
+      return unless values && values.size > 1
+      seen = Set(T).new
+      values.each_with_index do |value, i|
+        unless seen.add?(value)
+          errors << ValidationError.new("Duplicate value: #{value.inspect}", "#{path}[#{i}]")
+        end
       end
     end
 
@@ -420,6 +515,9 @@ module Sarif
     end
 
     private def validate_message_arguments(message : Message?, path : String, errors : Array(ValidationError))
+      if message && !message.valid?
+        errors << ValidationError.new("Message must have either text or id", path)
+      end
       validate_message_arguments(message, path, errors) { nil }
     end
 
@@ -467,18 +565,20 @@ module Sarif
 
     private def validate_result_provenance(provenance : ResultProvenance, path : String,
                                            errors : Array(ValidationError))
-      validate_timestamp(provenance.first_detection_time_utc, "#{path}.firstDetectionTimeUtc", errors)
-      validate_timestamp(provenance.last_detection_time_utc, "#{path}.lastDetectionTimeUtc", errors)
+      first = validate_timestamp(provenance.first_detection_time_utc, "#{path}.firstDetectionTimeUtc", errors)
+      last = validate_timestamp(provenance.last_detection_time_utc, "#{path}.lastDetectionTimeUtc", errors)
       validate_guid(provenance.first_detection_run_guid, "#{path}.firstDetectionRunGuid", errors)
       validate_guid(provenance.last_detection_run_guid, "#{path}.lastDetectionRunGuid", errors)
+      validate_min(provenance.invocation_index, NO_INDEX, "#{path}.invocationIndex", "invocationIndex", errors)
+      provenance.conversion_sources.try &.each_with_index do |source, i|
+        validate_physical_location(source, "#{path}.conversionSources[#{i}]", errors)
+      end
 
-      if (first = provenance.first_detection_time_utc) && (last = provenance.last_detection_time_utc)
-        if timestamps_reversed?(first, last)
-          errors << ValidationError.new(
-            "lastDetectionTimeUtc must not be before firstDetectionTimeUtc",
-            "#{path}.lastDetectionTimeUtc"
-          )
-        end
+      if first && last && first > last
+        errors << ValidationError.new(
+          "lastDetectionTimeUtc must not be before firstDetectionTimeUtc",
+          "#{path}.lastDetectionTimeUtc"
+        )
       end
     end
 
@@ -497,16 +597,21 @@ module Sarif
 
     private def validate_invocation(inv : Invocation, run : Run, path : String,
                                     errors : Array(ValidationError), *, depth : Int32)
-      validate_timestamp(inv.start_time_utc, "#{path}.startTimeUtc", errors)
-      validate_timestamp(inv.end_time_utc, "#{path}.endTimeUtc", errors)
+      start_time = validate_timestamp(inv.start_time_utc, "#{path}.startTimeUtc", errors)
+      end_time = validate_timestamp(inv.end_time_utc, "#{path}.endTimeUtc", errors)
 
-      if (start_time = inv.start_time_utc) && (end_time = inv.end_time_utc)
-        if timestamps_reversed?(start_time, end_time)
-          errors << ValidationError.new(
-            "endTimeUtc must not be before startTimeUtc",
-            "#{path}.endTimeUtc"
-          )
-        end
+      if start_time && end_time && start_time > end_time
+        errors << ValidationError.new(
+          "endTimeUtc must not be before startTimeUtc",
+          "#{path}.endTimeUtc"
+        )
+      end
+
+      {% for field in %w(executable_location working_directory stdin stdout stderr stdout_stderr) %}
+        validate_artifact_location(inv.{{field.id}}, "#{path}." + {{field.camelcase(lower: true)}}, errors)
+      {% end %}
+      inv.response_files.try &.each_with_index do |location, i|
+        validate_artifact_location(location, "#{path}.responseFiles[#{i}]", errors)
       end
 
       inv.rule_configuration_overrides.try &.each_with_index do |override, i|
@@ -574,6 +679,7 @@ module Sarif
                                   artifact_index : Int32, artifact_count : Int32,
                                   errors : Array(ValidationError))
       validate_message_arguments(artifact.description, "#{path}.description", errors)
+      validate_artifact_location(artifact.location, "#{path}.location", errors)
       if (length = artifact.length) && length < -1
         errors << ValidationError.new(
           "artifact length must be >= -1, got #{length}",
@@ -608,6 +714,7 @@ module Sarif
         end
       end
 
+      validate_unique_values(artifact.roles, "#{path}.roles", errors)
       artifact.roles.try &.each_with_index do |role, i|
         validate_enum(role, "#{path}.roles[#{i}]", errors)
       end
@@ -621,9 +728,12 @@ module Sarif
           "repositoryUri must not be empty",
           "#{path}.repositoryUri"
         )
+      else
+        validate_uri(vcd.repository_uri, "#{path}.repositoryUri", errors)
       end
 
       validate_timestamp(vcd.as_of_time_utc, "#{path}.asOfTimeUtc", errors)
+      validate_artifact_location(vcd.mapped_to, "#{path}.mappedTo", errors)
     end
 
     private def validate_code_flow(code_flow : CodeFlow, path : String, errors : Array(ValidationError))
@@ -657,6 +767,12 @@ module Sarif
       validate_min(tfl.execution_order, NO_INDEX, "#{path}.executionOrder", "executionOrder", errors)
       validate_enum(tfl.importance, "#{path}.importance", errors)
       validate_timestamp(tfl.execution_time_utc, "#{path}.executionTimeUtc", errors)
+      validate_unique_values(tfl.kinds, "#{path}.kinds", errors)
+      validate_min(tfl.web_request.try(&.index), NO_INDEX, "#{path}.webRequest.index", "index", errors)
+      validate_min(tfl.web_response.try(&.index), NO_INDEX, "#{path}.webResponse.index", "index", errors)
+      if stack = tfl.stack
+        validate_stack(stack, "#{path}.stack", errors)
+      end
       tfl.taxa.try &.each_with_index do |taxon, k|
         validate_descriptor_reference(taxon, "#{path}.taxa[#{k}]", errors)
       end
@@ -675,6 +791,7 @@ module Sarif
       end
 
       fix.artifact_changes.each_with_index do |change, i|
+        validate_artifact_location(change.artifact_location, "#{path}.artifactChanges[#{i}].artifactLocation", errors)
         if change.replacements.empty?
           errors << ValidationError.new(
             "artifactChange must have at least one replacement",
@@ -698,6 +815,11 @@ module Sarif
       validate_message_arguments(location.message, "#{path}.message", errors)
       location.relationships.try &.each_with_index do |relationship, i|
         validate_min(relationship.target, 0, "#{path}.relationships[#{i}].target", "target", errors)
+        validate_unique_values(relationship.kinds, "#{path}.relationships[#{i}].kinds", errors)
+        validate_message_arguments(relationship.description, "#{path}.relationships[#{i}].description", errors)
+      end
+      location.logical_locations.try &.each_with_index do |logical, i|
+        validate_logical_location(logical, "#{path}.logicalLocations[#{i}]", errors)
       end
 
       if physical = location.physical_location
@@ -718,6 +840,11 @@ module Sarif
         )
       end
 
+      validate_artifact_location(physical.artifact_location, "#{path}.artifactLocation", errors)
+      if address = physical.address
+        validate_address(address, "#{path}.address", errors)
+      end
+
       if region = physical.region
         validate_region(region, "#{path}.region", errors)
       end
@@ -733,6 +860,23 @@ module Sarif
           )
         end
       end
+    end
+
+    private def validate_artifact_location(location : ArtifactLocation?, path : String, errors : Array(ValidationError))
+      return unless location
+      validate_min(location.index, NO_INDEX, "#{path}.index", "index", errors)
+      validate_message_arguments(location.description, "#{path}.description", errors)
+    end
+
+    private def validate_logical_location(location : LogicalLocation, path : String, errors : Array(ValidationError))
+      validate_min(location.index, NO_INDEX, "#{path}.index", "index", errors)
+      validate_min(location.parent_index, NO_INDEX, "#{path}.parentIndex", "parentIndex", errors)
+    end
+
+    private def validate_address(address : Address, path : String, errors : Array(ValidationError))
+      validate_min(address.absolute_address, -1, "#{path}.absoluteAddress", "absoluteAddress", errors)
+      validate_min(address.index, NO_INDEX, "#{path}.index", "index", errors)
+      validate_min(address.parent_index, NO_INDEX, "#{path}.parentIndex", "parentIndex", errors)
     end
 
     private def validate_region(region : Region, path : String,
@@ -838,25 +982,43 @@ module Sarif
       end
     end
 
-    private def validate_timestamp(value : String?, path : String, errors : Array(ValidationError))
+    private def validate_timestamp(value : String?, path : String, errors : Array(ValidationError)) : Tuple(Int64, Int32, String)?
       return unless value
-      unless RFC3339_PATTERN.matches?(value)
-        errors << ValidationError.new(
-          "Invalid timestamp format: '#{value}'. Expected RFC 3339 format (e.g., 2024-01-01T00:00:00Z)",
-          path
-        )
+      if timestamp = parse_timestamp(value)
+        return timestamp
       end
+      errors << ValidationError.new(
+        "Invalid timestamp format: '#{value}'. Expected a SARIF date or date/time (e.g., 2024-01-01T00:00:00Z)",
+        path
+      )
+      nil
     end
 
-    # True when `later` is an earlier instant than `earlier`. Comparing the raw
-    # strings misorders fractional seconds and offsets ("…00.5Z" sorts before
-    # "…00Z"), so instants are compared; values Crystal cannot parse (leap
-    # seconds, more than nine fractional digits, out-of-range offsets) fall
-    # back to string order.
-    private def timestamps_reversed?(earlier : String, later : String) : Bool
-      Time::Format::RFC_3339.parse(earlier) > Time::Format::RFC_3339.parse(later)
-    rescue Time::Format::Error | Time::Error | ArgumentError
-      earlier > later
+    # §3.9 allows dates, minute precision, 24:00, leap seconds and arbitrary
+    # fractional precision. Also accept RFC 3339 offsets for compatibility.
+    private def parse_timestamp(value : String) : Tuple(Int64, Int32, String)?
+      return unless match = TIMESTAMP_PATTERN.match(value)
+      date = Time.utc(match[1].to_i, match[2].to_i, match[3].to_i)
+      hour = match[4]?.try(&.to_i) || 0
+      minute = match[5]?.try(&.to_i) || 0
+      second = match[6]?.try(&.to_i) || 0
+      fraction = match[7]?.try(&.rstrip('0')) || ""
+      return if hour > 24 || minute > 59 || second > 60
+      return if hour == 24 && (minute != 0 || second != 0 || !fraction.empty?)
+
+      offset = 0
+      if (zone = match[8]?) && zone != "Z"
+        offset_hour, offset_minute = zone[1, 2].to_i, zone[4, 2].to_i
+        return if match[6]?.nil? || offset_hour > 23 || offset_minute > 59
+        offset = (offset_hour * 60 + offset_minute) * (zone.starts_with?('-') ? -1 : 1)
+      end
+
+      # Compare leap seconds after :59 fractions and before the next minute.
+      # Fractions compare as strings once trailing zeroes are removed.
+      seconds = date.to_unix + hour * 3600 + (minute - offset) * 60 + Math.min(second, 59)
+      {seconds, second == 60 ? 1 : 0, fraction}
+    rescue ArgumentError
+      nil
     end
 
     # Reports an enum-valued property whose input string was outside the SARIF
@@ -876,7 +1038,6 @@ module Sarif
 
     private def validate_uri(value : String?, path : String, errors : Array(ValidationError))
       return unless value
-      return if value.empty?
       unless URI_PATTERN.matches?(value)
         errors << ValidationError.new(
           "Invalid URI format: '#{value}'. Expected absolute URI with scheme",
@@ -894,7 +1055,7 @@ module Sarif
       loops = uri_base_id_loops(base_ids)
       base_ids.each do |name, location|
         entry_path = "#{path}.#{name}"
-        validate_message_arguments(location.description, "#{entry_path}.description", errors)
+        validate_artifact_location(location, entry_path, errors)
         uri = location.uri
         absolute = uri && URI_PATTERN.matches?(uri)
         if uri && !absolute && location.uri_base_id.nil?
@@ -944,8 +1105,8 @@ module Sarif
       loops
     end
 
-    private def validate_graph_traversal(gt : GraphTraversal, path : String,
-                                         errors : Array(ValidationError))
+    private def validate_graph_traversal(gt : GraphTraversal, run : Run, result : Result, path : String,
+                                         errors : Array(ValidationError), graph_edge_ids : Hash(Graph, Set(String)))
       validate_message_arguments(gt.description, "#{path}.description", errors)
       # Exactly one of the two SHALL be present (§3.42.2).
       if gt.run_graph_index.nil? == gt.result_graph_index.nil?
@@ -953,6 +1114,35 @@ module Sarif
           "graphTraversal must have exactly one of runGraphIndex or resultGraphIndex",
           path
         )
+      end
+      if index = gt.run_graph_index
+        validate_min(index, 0, "#{path}.runGraphIndex", "runGraphIndex", errors)
+        graph = run.graphs.try(&.[index]?) if index >= 0
+        if index >= 0 && !graph && run.external_property_file_references.try(&.graphs).try(&.empty?) != false
+          errors << ValidationError.new("runGraphIndex #{index} does not identify a graph", "#{path}.runGraphIndex")
+        end
+      elsif index = gt.result_graph_index
+        validate_min(index, 0, "#{path}.resultGraphIndex", "resultGraphIndex", errors)
+        graph = result.graphs.try(&.[index]?) if index >= 0
+        if index >= 0 && !graph
+          errors << ValidationError.new("resultGraphIndex #{index} does not identify a graph", "#{path}.resultGraphIndex")
+        end
+      end
+
+      if (traversals = gt.edge_traversals) && !traversals.empty?
+        edge_ids = graph.try do |g|
+          graph_edge_ids[g] ||= Set(String).new.tap do |ids|
+            g.edges.try &.each { |edge| ids << edge.id }
+          end
+        end
+        traversals.each_with_index do |edge, i|
+          edge_path = "#{path}.edgeTraversals[#{i}]"
+          validate_message_arguments(edge.message, "#{edge_path}.message", errors)
+          validate_min(edge.step_over_edge_count, 0, "#{edge_path}.stepOverEdgeCount", "stepOverEdgeCount", errors)
+          if edge_ids && !edge_ids.includes?(edge.edge_id)
+            errors << ValidationError.new("Unknown edgeId '#{edge.edge_id}'", "#{edge_path}.edgeId")
+          end
+        end
       end
     end
 
@@ -1117,13 +1307,13 @@ module Sarif
     private def validate_external_property_file_references(refs : ExternalPropertyFileReferences, path : String,
                                                            errors : Array(ValidationError))
       if conversion = refs.conversion
-        validate_external_property_file_reference(conversion, "#{path}.conversion", errors)
+        validate_external_property_file_reference(conversion, "#{path}.conversion", errors, object: true)
       end
       refs.graphs.try &.each_with_index do |item, i|
         validate_external_property_file_reference(item, "#{path}.graphs[#{i}]", errors)
       end
       if ext_props = refs.externalized_properties
-        validate_external_property_file_reference(ext_props, "#{path}.externalizedProperties", errors)
+        validate_external_property_file_reference(ext_props, "#{path}.externalizedProperties", errors, object: true)
       end
       refs.artifacts.try &.each_with_index do |item, i|
         validate_external_property_file_reference(item, "#{path}.artifacts[#{i}]", errors)
@@ -1147,7 +1337,7 @@ module Sarif
         validate_external_property_file_reference(item, "#{path}.addresses[#{i}]", errors)
       end
       if driver = refs.driver
-        validate_external_property_file_reference(driver, "#{path}.driver", errors)
+        validate_external_property_file_reference(driver, "#{path}.driver", errors, object: true)
       end
       refs.extensions.try &.each_with_index do |item, i|
         validate_external_property_file_reference(item, "#{path}.extensions[#{i}]", errors)
@@ -1167,7 +1357,7 @@ module Sarif
     end
 
     private def validate_external_property_file_reference(ref : ExternalPropertyFileReference, path : String,
-                                                          errors : Array(ValidationError))
+                                                          errors : Array(ValidationError), *, object : Bool = false)
       if ref.location.nil? && ref.guid.nil?
         errors << ValidationError.new(
           "externalPropertyFileReference must have either location or guid",
@@ -1176,6 +1366,12 @@ module Sarif
       end
 
       validate_guid(ref.guid, "#{path}.guid", errors)
+      validate_artifact_location(ref.location, "#{path}.location", errors)
+      if object && ref.item_count
+        errors << ValidationError.new("itemCount must be absent for an object-valued property", "#{path}.itemCount")
+      else
+        validate_min(ref.item_count, -1, "#{path}.itemCount", "itemCount", errors)
+      end
     end
 
     private def validate_array_limit(array : Array, limit : Int32?, path : String,

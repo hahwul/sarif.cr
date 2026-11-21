@@ -11,7 +11,11 @@ module Sarif
 
     property tool : Tool
 
+    @[JSON::Field(emit_null: true, presence: true, ignore_serialize: @results.nil? && !@results_present)]
     property results : Array(Result)? = nil
+
+    @[JSON::Field(ignore: true)]
+    @results_present = false
 
     property artifacts : Array(Artifact)? = nil
 
@@ -153,6 +157,57 @@ module Sarif
 
     def rule_by_id(rule_id : String) : ReportingDescriptor?
       tool.driver.rules.try &.find { |r| r.id == rule_id }
+    end
+
+    # Resolves an artifact URI and its `uriBaseId` chain (§3.4, §3.14.14).
+    # An index-only location takes its URI and base ID from the indexed artifact.
+    # Returns nil when an index or base ID cannot be resolved, including cycles.
+    # Without a base ID or `base_uri`, a relative URI is returned as given.
+    def resolve_artifact_uri(location : ArtifactLocation, *, base_uri : String? = nil) : String?
+      unless location.uri
+        index = location.index
+        return unless index && index >= 0
+        indexed = artifacts.try(&.[index]?).try(&.location)
+        return unless indexed
+        location = indexed
+      end
+
+      uri = location.uri
+      return unless uri
+      parsed = parse_artifact_uri(uri)
+      return unless parsed
+      return uri if parsed.absolute?
+      base_id = location.uri_base_id
+      unless base_id
+        return uri unless base_uri
+        return parse_artifact_uri(base_uri).try(&.resolve(parsed).to_s)
+      end
+
+      relative = [parsed]
+      visited = Set(String).new
+      loop do
+        return unless visited.add?(base_id)
+        base = original_uri_base_ids.try(&.[base_id]?)
+        return unless base && (base_value = base.uri)
+        parsed_base = parse_artifact_uri(base_value)
+        return unless parsed_base
+        if parsed_base.absolute?
+          return relative.reverse_each.reduce(parsed_base) { |resolved, segment| resolved.resolve(segment) }.to_s
+        end
+
+        relative << parsed_base
+        base_id = base.uri_base_id
+        return unless base_id
+      end
+    end
+
+    private def parse_artifact_uri(value : String) : URI?
+      uri = URI.parse(value)
+      # §3.10.2 prohibits normalizing parent-directory segments during resolution.
+      return if uri.path.split('/').any? { |segment| segment.gsub(/%2e/i, ".") == ".." }
+      uri
+    rescue URI::Error
+      nil
     end
 
     # Resolves a `ToolComponentReference` to the `ToolComponent` it identifies.

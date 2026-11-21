@@ -52,6 +52,29 @@ log = Sarif.from_file("report.sarif")
 log = Sarif.from_file!("report.sarif") # with validation
 ```
 
+### Resolving external properties
+
+For reports that declare `externalPropertyFileReferences`, resolve the references before querying or validating the combined runs. Inline properties are located by GUID or `sarif:` URI. The method returns a new log and appends external arrays in reference order.
+
+```crystal
+log = Sarif.from_file("report.sarif")
+resolved = log.resolve_external_properties
+```
+
+For separate property files, provide a loader that returns a `Sarif::ExternalProperties` object. `base_uri` gives relative references the location of the root report. The loader controls which files are read.
+
+```crystal
+parts = {
+  "file:///reports/results.sarif-external-properties" =>
+    Sarif::ExternalProperties.from_json(File.read("/reports/results.sarif-external-properties")),
+}
+
+resolved = log.resolve_external_properties(base_uri: "file:///reports/report.sarif") do |uri|
+  parts.fetch(uri)
+end
+validation = Sarif::Validator.new.validate(resolved)
+```
+
 ### Validating SARIF
 
 ```crystal

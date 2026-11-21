@@ -1,6 +1,33 @@
 require "../spec_helper"
 
 describe Sarif::Run do
+  it "round-trips null results and keeps omitted and empty results distinct" do
+    ["null", "[]"].each do |value|
+      json = %({"tool":{"driver":{"name":"T"}},"results":#{value}})
+      JSON.parse(Sarif::Run.from_json(json).to_json)["results"].to_json.should eq(value)
+    end
+    run = Sarif::Run.from_json(%({"tool":{"driver":{"name":"T"}}}))
+    JSON.parse(run.to_json)["results"]?.should be_nil
+  end
+
+  it "resolves index-only artifact URIs through nested URI base IDs" do
+    log = Sarif.parse!(<<-JSON)
+      {"version":"2.1.0","runs":[{"tool":{"driver":{"name":"T"}},"originalUriBaseIds":{
+        "ROOT":{"uri":"file:///repo/"},"SOURCE":{"uri":"src/","uriBaseId":"ROOT"}},
+        "artifacts":[{"location":{"uri":"main%20file.cr","uriBaseId":"SOURCE"}}],
+        "results":[{"message":{"text":"m"},"locations":[{"physicalLocation":{"artifactLocation":{"index":0}}}]}]}]}
+      JSON
+    run = log.runs!.first
+    uri = "file:///repo/src/main%20file.cr"
+    run.resolve_artifact_uri(Sarif::ArtifactLocation.new(index: 0)).should eq(uri)
+    log.find_locations_in_file(uri).size.should eq(1)
+    log.find_locations_in_file("main%20file.cr").size.should eq(1)
+    run.resolve_artifact_uri(Sarif::ArtifactLocation.new(index: -1)).should be_nil
+    run.resolve_artifact_uri(Sarif::ArtifactLocation.new(uri: "x", uri_base_id: "MISSING")).should be_nil
+    run.resolve_artifact_uri(Sarif::ArtifactLocation.new(uri: "%2e./outside.cr", uri_base_id: "SOURCE")).should be_nil
+    run.original_uri_base_ids.not_nil!["ROOT"] = Sarif::ArtifactLocation.new(uri: "root/", uri_base_id: "SOURCE")
+    run.resolve_artifact_uri(Sarif::ArtifactLocation.new(index: 0)).should be_nil
+  end
   it "creates with tool" do
     run = Sarif::Run.new(
       tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "TestTool"))

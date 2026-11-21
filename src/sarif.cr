@@ -1,4 +1,5 @@
 require "json"
+require "uri"
 
 module Sarif
   VERSION = "0.2.0"
@@ -81,6 +82,7 @@ require "./sarif/external_property_file_references"
 require "./sarif/external_properties"
 require "./sarif/run"
 require "./sarif/sarif_log"
+require "./sarif/external_property_resolver"
 
 # User API
 require "./sarif/builder"
