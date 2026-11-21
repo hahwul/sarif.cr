@@ -1,6 +1,62 @@
 require "../spec_helper"
 
 describe Sarif::Validator do
+  it "accepts the SARIF date/time forms and reports invalid dates at their fields" do
+    valid_json = <<-JSON
+      {"version":"2.1.0","runs":[{"tool":{"driver":{"name":"T","releaseDateUtc":"2024-02-29"}},
+        "invocations":[{"executionSuccessful":true,"startTimeUtc":"2024-02-29T24:00Z","endTimeUtc":"2024-03-01"}],
+        "results":[{"message":{"text":"m"},"provenance":{"firstDetectionTimeUtc":"2016-12-31T23:59:60.01Z",
+          "lastDetectionTimeUtc":"2017-01-01T00:00Z"}}]}]}
+      JSON
+    Sarif.parse!(valid_json)
+    invalid_json = valid_json.sub("2024-02-29\"", "2023-02-29\"").sub("24:00Z", "24:01Z").sub("23:59:60.01Z", "23:59:59+99:00")
+    Sarif::Validator.new.validate(Sarif.parse(invalid_json)).errors.map(&.path).should eq([
+      "$.runs[0].tool.driver.releaseDateUtc",
+      "$.runs[0].results[0].provenance.firstDetectionTimeUtc",
+      "$.runs[0].invocations[0].startTimeUtc",
+    ])
+  end
+
+  it "validates graph traversal indexes, edge references, and step counts" do
+    json = <<-JSON
+      {"version":"2.1.0","runs":[{"tool":{"driver":{"name":"T"}},"results":[{
+        "message":{"text":"m"},"graphs":[{"nodes":[{"id":"a"},{"id":"b"}],
+          "edges":[{"id":"ab","sourceNodeId":"a","targetNodeId":"b"}]}],
+        "graphTraversals":[{"resultGraphIndex":0,"edgeTraversals":[{"edgeId":"ab","stepOverEdgeCount":0}]}]
+      }]}]}
+      JSON
+    Sarif.parse!(json)
+    invalid_json = json.sub("\"edgeId\":\"ab\"", "\"edgeId\":\"unknown\"").sub("\"stepOverEdgeCount\":0", "\"stepOverEdgeCount\":-1")
+    validate = ->(input : String) { Sarif::Validator.new.validate(Sarif.parse(input)).errors.map(&.path) }
+    prefix = "$.runs[0].results[0].graphTraversals[0]"
+    validate.call(invalid_json).should eq(["#{prefix}.edgeTraversals[0].stepOverEdgeCount", "#{prefix}.edgeTraversals[0].edgeId"])
+    validate.call(json.sub("\"resultGraphIndex\":0", "\"resultGraphIndex\":1")).should eq(["#{prefix}.resultGraphIndex"])
+    validate.call(json.sub("\"resultGraphIndex\":0", "\"runGraphIndex\":-1")).should eq(["#{prefix}.runGraphIndex"])
+  end
+
+  it "checks the schema constraints of nested metadata and locations" do
+    json = <<-JSON
+      {"version":"2.1.0","inlineExternalProperties":[{"version":"2.2","runGuid":"bad"}],"runs":[{
+        "tool":{"driver":{"name":"T"}},"newlineSequences":[],"taxonomies":[{"name":"X","taxa":[{"id":"A","guid":"bad"}]}],
+        "externalPropertyFileReferences":{"artifacts":[{"location":{"uri":"part.json"},"itemCount":-2}]},
+        "results":[{"message":{"text":"m"},"locations":[{"physicalLocation":{"address":{"absoluteAddress":-2}}}],
+          "attachments":[{"artifactLocation":{"index":-2},"regions":[{"startLine":0}] }],
+          "provenance":{"invocationIndex":-2,"conversionSources":[{"artifactLocation":{},"region":{"message":{},"startLine":1}}]}}]
+      }]}
+      JSON
+    Sarif::Validator.new.validate(Sarif.parse(json)).errors.map(&.path).sort.should eq([
+      "$.inlineExternalProperties[0].runGuid",
+      "$.inlineExternalProperties[0].version",
+      "$.runs[0].externalPropertyFileReferences.artifacts[0].itemCount",
+      "$.runs[0].newlineSequences",
+      "$.runs[0].results[0].attachments[0].artifactLocation.index",
+      "$.runs[0].results[0].attachments[0].regions[0].startLine",
+      "$.runs[0].results[0].locations[0].physicalLocation.address.absoluteAddress",
+      "$.runs[0].results[0].provenance.conversionSources[0].region.message",
+      "$.runs[0].results[0].provenance.invocationIndex",
+      "$.runs[0].taxonomies[0].taxa[0].guid",
+    ])
+  end
   it "validates a correct SARIF log" do
     log = Sarif::SarifLog.new(
       runs: [
@@ -547,8 +603,8 @@ describe Sarif::Validator do
     Sarif::Validator.new.validate(log).valid?.should be_true
   end
 
-  it "does not raise on timestamps Crystal cannot parse and still orders them" do
-    ["+99:00", ".0000000001Z"].each do |suffix|
+  it "orders timestamps beyond Crystal's nanosecond precision" do
+    [".0000000001Z", ".0000000001000000000001Z"].each do |suffix|
       log = Sarif::SarifLog.new(
         runs: [
           Sarif::Run.new(
@@ -556,8 +612,8 @@ describe Sarif::Validator do
             invocations: [
               Sarif::Invocation.new(
                 execution_successful: true,
-                start_time_utc: "2025-01-01T00:00:00#{suffix}",
-                end_time_utc: "2024-01-01T00:00:00Z"
+                start_time_utc: "2024-01-01T00:00:00#{suffix}",
+                end_time_utc: "2024-01-01T00:00:00.00000000009Z"
               ),
             ]
           ),
@@ -792,6 +848,7 @@ describe Sarif::Validator do
       runs: [
         Sarif::Run.new(
           tool: Sarif::Tool.new(driver: Sarif::ToolComponent.new(name: "Tool")),
+          graphs: [Sarif::Graph.new],
           results: [
             Sarif::Result.new(
               message: Sarif::Message.new(text: "issue"),

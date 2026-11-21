@@ -5,7 +5,7 @@ module Sarif
   SARIF_VERSION = "2.1.0"
 
   # The default JSON schema URI for SARIF 2.1.0.
-  SARIF_SCHEMA = "https://docs.oasis-open.org/sarif/sarif/v2.1.0/cos02/schemas/sarif-schema-2.1.0.json"
+  SARIF_SCHEMA = "https://docs.oasis-open.org/sarif/sarif/v2.1.0/errata01/os/schemas/sarif-schema-2.1.0.json"
 
   # The root object of a SARIF log file.
   #
@@ -93,6 +93,24 @@ module Sarif
       runs || raise Error.new("SarifLog runs is null (the tool failed to start)")
     end
 
+    # Returns a log with its inline external properties applied to the runs
+    # (SARIF 2.1.0 §3.13.5, §3.15). Raises `Error` if a reference cannot be resolved.
+    def resolve_external_properties : SarifLog
+      resolve_external_properties do |uri|
+        raise Error.new("No external property file loader was supplied for '#{uri}'")
+      end
+    end
+
+    # Also resolves separate files using the caller's loader. Pass the root
+    # document's URI as `base_uri` to resolve relative file references (§3.16.3).
+    # The source log and the loaded property objects are not modified.
+    def resolve_external_properties(*, base_uri : String? = nil, &loader : String -> ExternalProperties) : SarifLog
+      resolver = ExternalPropertyResolver.new(inline_external_properties, base_uri, loader)
+      resolved = dup
+      resolved.runs = runs.try &.map_with_index { |run, i| resolver.resolve(run, "$.runs[#{i}]") }
+      resolved
+    end
+
     # Returns all results from all runs, flattened into a single array.
     def all_results : Array(Result)
       runs.try(&.flat_map { |run| run.results || [] of Result }) || [] of Result
@@ -135,14 +153,18 @@ module Sarif
     # Returns all locations that reference the given file URI across all results.
     #
     # An `artifactLocation` without a `uri` names its file through `index` into
-    # its run's `artifacts` (§3.4.2), so that artifact's `uri` is compared.
+    # its run's `artifacts` (§3.4.2). An absolute URI can also match a
+    # location through its run's `originalUriBaseIds` (§3.14.14).
     def find_locations_in_file(uri : String) : Array(Location)
       locations = [] of Location
+      absolute = uri.matches?(/\A[a-zA-Z][a-zA-Z0-9+\-.]*:/)
       runs.try &.each do |run|
         run.results.try &.each do |result|
           result.locations.try &.each do |loc|
             next unless artifact_loc = loc.physical_location.try(&.artifact_location)
-            locations << loc if location_uri(run, artifact_loc) == uri
+            if location_uri(run, artifact_loc) == uri || (absolute && run.resolve_artifact_uri(artifact_loc) == uri)
+              locations << loc
+            end
           end
         end
       end

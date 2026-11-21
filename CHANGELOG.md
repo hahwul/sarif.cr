@@ -10,12 +10,18 @@
 
 ### Added
 
+- `SarifLog#resolve_external_properties` applies inline and separate external property documents to a copy of the log, using an explicit loader for separate files (§3.13.5, §3.15, §4.3).
+- `Run#resolve_artifact_uri` resolves index-only artifact locations and chained `originalUriBaseIds`. File lookups also match the resulting absolute URIs (§3.4, §3.14.14).
 - `SarifLog#runs!`.
 - `Run#resolve_notification_reference` (§3.52.3 lookup within `notifications`).
 - `Result#effective_rule_id` (`ruleId`, else `rule.id`).
 
 ### Fixed
 
+- `Run` preserves an explicit `"results": null` on round-trip (§3.14.23).
+- `Validator` accepts SARIF date-only and minute-precision timestamps, handles end-of-day midnight and leap seconds, and compares fractional seconds at their original precision (§3.9).
+- `Validator` checks graph traversal indexes, edge IDs and step counts, plus previously skipped constraints in attachments, artifact locations, provenance, tool components and external property references.
+- New logs use the SARIF 2.1.0 Errata 01 schema URI.
 - `Builder` always emits `results` on a run, as `[]` when nothing was added (§3.14.23). It used to drop the empty array, and an absent `results` means null: "the tool failed to start". Callers that tested `run.results.nil?` to detect a clean run should test `empty?`.
 - `Sarif.parse(io, max_size:)` reads at most `max_size + 1` bytes. It used to read the whole IO before comparing it with the cap, so an endless or huge stream was buffered in full. `Sarif.from_file(path, max_size:)` does the same for a FIFO or device, whose `File.size` says nothing about how much it delivers. A negative or `Int64::MAX` cap no longer raises `ArgumentError`/`OverflowError` on the IO path.
 - `Sarif.with_strict_enums` is scoped to the calling fiber. It used to flip the process-wide flag, so another fiber parsing while the block waited on IO also became strict, and interleaved blocks could restore the wrong value. `Sarif.strict_enums=` still sets the process-wide default.
