@@ -1,6 +1,59 @@
 require "../spec_helper"
 
 describe Sarif::ExternalProperties do
+  it "parses a run whose driver and referenced extension are stored externally" do
+    source = Sarif.parse!(<<-JSON)
+      {"version":"2.1.0","inlineExternalProperties":[{
+        "driver":{"name":"T","rules":[{"id":"A"}]},"extensions":[{"name":"plugin","rules":[{"id":"B"}]}]
+      }],"runs":[{"tool":{},"externalPropertyFileReferences":{
+        "driver":{"location":{"uri":"sarif:/inlineExternalProperties/0"}},
+        "extensions":[{"location":{"uri":"sarif:/inlineExternalProperties/0"}}]
+      },"results":[{"ruleIndex":0,"message":{"text":"driver rule"}},
+        {"rule":{"index":0,"toolComponent":{"index":0}},"message":{"text":"extension rule"}}]}]}
+      JSON
+    before = source.to_json
+    JSON.parse(before)["runs"][0]["tool"]["driver"]?.should be_nil
+    source.valid?.should be_true
+    source_tool = source.runs!.first.tool
+    source_tool.driver?.should be_nil
+    expect_raises(Sarif::Error, /Resolve external properties/) { source_tool.driver }
+    source.runs!.first.rule_by_id("A").should be_nil
+    resolved = source.resolve_external_properties
+    run = Sarif.parse!(resolved.to_json).runs!.first
+    run.tool.driver.name.should eq("T")
+    run.results.not_nil!.map { |result| result.resolve_rule(run).not_nil!.id }.should eq(%w(A B))
+    source.to_json.should eq(before)
+  end
+
+  it "resolves a later artifact part by index into an earlier part" do
+    source = Sarif.parse!(<<-JSON)
+      {"version":"2.1.0","inlineExternalProperties":[
+        {"artifacts":[{"location":{"uri":"sarif:/inlineExternalProperties/1"}}]},
+        {"artifacts":[{"location":{"uri":"source.cr"}}]}
+      ],"runs":[{"tool":{"driver":{"name":"T"}},"externalPropertyFileReferences":{"artifacts":[
+        {"location":{"uri":"sarif:/inlineExternalProperties/0"}}, {"location":{"index":0}}
+      ]}}]}
+      JSON
+    resolved = source.resolve_external_properties
+    resolved.runs!.first.artifacts.not_nil!.map { |artifact| artifact.location.not_nil!.uri }.should eq([
+      "sarif:/inlineExternalProperties/1", "source.cr",
+    ])
+    source.runs!.first.artifacts.should be_nil
+  end
+
+  it "validates converter notifications while the analysis driver is external" do
+    source = Sarif.parse(<<-JSON)
+      {"version":"2.1.0","runs":[{"tool":{},"externalPropertyFileReferences":{
+        "driver":{"location":{"uri":"driver.json"}}},"conversion":{
+        "tool":{"driver":{"name":"converter","globalMessageStrings":{"event":{"text":"{0}"}}}},
+        "invocation":{"executionSuccessful":true,"toolExecutionNotifications":[{"message":{"id":"event"}}]}
+      }}]}
+      JSON
+    Sarif::Validator.new.validate(source).errors.map(&.path).should eq([
+      "$.runs[0].conversion.invocation.toolExecutionNotifications[0].message.arguments",
+    ])
+  end
+
   it "resolves shared properties by pointer or GUID and appends split arrays in reference order" do
     source = Sarif.parse <<-JSON
       {"version":"2.1.0","inlineExternalProperties":[

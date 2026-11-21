@@ -9,6 +9,7 @@ module Sarif
   class Run
     include JSON::Serializable
 
+    @[JSON::Field(converter: ::Sarif::Tool::RunConverter)]
     property tool : Tool
 
     @[JSON::Field(emit_null: true, presence: true, ignore_serialize: @results.nil? && !@results_present)]
@@ -113,6 +114,15 @@ module Sarif
                    @properties : PropertyBag? = nil)
     end
 
+    def self.new(pull : JSON::PullParser)
+      line, column = pull.location_i64
+      run = previous_def
+      unless run.tool.driver? || run.external_property_file_references.try(&.driver)
+        raise JSON::SerializableError.new("Missing JSON attribute: driver", Tool.to_s, "driver", line, column, nil)
+      end
+      run
+    end
+
     def results_by_rule_id(rule_id : String) : Array(Result)
       return [] of Result unless rs = results
       rs.select { |r| r.effective_rule_id == rule_id }
@@ -156,7 +166,7 @@ module Sarif
     end
 
     def rule_by_id(rule_id : String) : ReportingDescriptor?
-      tool.driver.rules.try &.find { |r| r.id == rule_id }
+      tool.driver?.try(&.rules).try &.find { |r| r.id == rule_id }
     end
 
     # Resolves an artifact URI and its `uriBaseId` chain (§3.4, §3.14.14).
@@ -220,18 +230,19 @@ module Sarif
     #
     # See: [SARIF 2.1.0 §3.54.2](https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html#_Toc34317884)
     def tool_component_for(reference : ToolComponentReference?) : ToolComponent?
-      return tool.driver unless reference
+      driver = tool.driver?
+      return driver unless reference
 
       if (idx = reference.index) && idx >= 0
         return tool.extensions.try &.[idx]?
       end
 
       if guid = reference.guid
-        return tool.driver if tool.driver.guid == guid
-        return tool.extensions.try &.find { |ext| ext.guid == guid }
+        return driver if driver.try(&.guid).try(&.compare(guid, case_insensitive: true)) == 0
+        return tool.extensions.try &.find { |ext| ext.guid.try(&.compare(guid, case_insensitive: true)) == 0 }
       end
 
-      tool.driver
+      driver
     end
 
     # Resolves a `ReportingDescriptorReference` to the rule it identifies.
@@ -271,14 +282,18 @@ module Sarif
       end
 
       if guid = reference.guid
-        return descriptors.find { |r| r.guid == guid }
+        return descriptors.find { |r| r.guid.try(&.compare(guid, case_insensitive: true)) == 0 }
       end
 
       nil
     end
 
     def valid? : Bool
-      return false if tool.driver.name.empty?
+      if driver = tool.driver?
+        return false if driver.name.empty?
+      elsif external_property_file_references.try(&.driver).nil?
+        return false
+      end
       results.try &.each do |result|
         return false unless result.valid?
       end

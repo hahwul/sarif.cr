@@ -61,6 +61,8 @@ log = Sarif.from_file("report.sarif")
 resolved = log.resolve_external_properties
 ```
 
+If a run externalizes `tool.driver`, `run.tool.driver?` returns `nil` before resolution. Access `tool.driver` on the resolved run.
+
 For separate property files, provide a loader that returns a `Sarif::ExternalProperties` object. `base_uri` gives relative references the location of the root report. The loader controls which files are read.
 
 ```crystal

@@ -1,6 +1,16 @@
 require "../spec_helper"
 
 describe Sarif::Tool do
+  it "requires a driver unless a run explicitly externalizes it" do
+    expect_raises(JSON::SerializableError, /Missing JSON attribute: driver/) { Sarif::Tool.from_json("{}") }
+    expect_raises(Sarif::Error, /Missing JSON attribute: driver/) do
+      Sarif.parse(%({"version":"2.1.0","runs":[{"tool":{}}]}))
+    end
+    expect_raises(Sarif::Error, /driver/) do
+      Sarif.parse(%({"version":"2.1.0","runs":[{"tool":{"driver":null},"externalPropertyFileReferences":{"driver":{"location":{"uri":"part.json"}}}}]}))
+    end
+  end
+
   it "creates with driver" do
     tool = Sarif::Tool.new(
       driver: Sarif::ToolComponent.new(name: "MyTool", version: "1.0.0")

@@ -122,7 +122,8 @@ module Sarif
     #   rule's configuration when a `run` is supplied and the rule is
     #   resolvable: a matching `configurationOverride` reachable through
     #   `provenance.invocationIndex` wins over the rule's
-    #   `defaultConfiguration.level`.
+    #   `defaultConfiguration.level`. An omitted index selects the only
+    #   invocation when the run contains exactly one (§3.48.6).
     # - Else it falls back to `warning`.
     #
     # See: [SARIF 2.1.0 §3.27.10](https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html#_Toc34317648)
@@ -205,10 +206,14 @@ module Sarif
     #
     # See: [SARIF 2.1.0 §3.20.5](https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html#_Toc34317566)
     private def resolve_override_level(run : Run, descriptor : ReportingDescriptor) : Level?
+      return unless invocations = run.invocations
       idx = provenance.try &.invocation_index
+      if idx.nil? && invocations.size == 1 && run.external_property_file_references.try(&.invocations).try(&.empty?) != false
+        idx = 0
+      end
       return unless idx && idx >= 0
 
-      invocation = run.invocations.try &.[idx]?
+      invocation = invocations[idx]?
       return unless invocation
 
       overrides = invocation.rule_configuration_overrides

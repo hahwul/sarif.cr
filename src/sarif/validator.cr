@@ -82,10 +82,11 @@ module Sarif
     private def validate_run(run : Run, path : String, errors : Array(ValidationError), *, depth : Int32)
       return unless check_depth!(path, depth, errors)
 
-      validate_tool(run.tool, "#{path}.tool", errors)
+      validate_tool(run.tool, run, "#{path}.tool", errors,
+        allow_external_driver: !run.external_property_file_references.try(&.driver).nil?)
       {% for field in %w(taxonomies translations policies) %}
         run.{{field.id}}.try &.each_with_index do |component, i|
-          validate_tool_component(component, "#{path}.{{field.id}}[#{i}]", errors)
+          validate_tool_component(component, run, "#{path}.{{field.id}}[#{i}]", errors)
         end
       {% end %}
       if sequences = run.newline_sequences
@@ -97,33 +98,34 @@ module Sarif
       validate_unique_values(run.redaction_tokens, "#{path}.redactionTokens", errors)
 
       if conversion = run.conversion
-        validate_tool(conversion.tool, "#{path}.conversion.tool", errors)
+        validate_tool(conversion.tool, run, "#{path}.conversion.tool", errors)
         if invocation = conversion.invocation
-          validate_invocation(invocation, Run.new(tool: conversion.tool), "#{path}.conversion.invocation", errors, depth: depth)
+          converter_run = run.dup
+          converter_run.tool = conversion.tool
+          # Only the analysis tool can externalize its driver and extensions.
+          if refs = run.external_property_file_references.try(&.dup)
+            refs.driver = nil
+            refs.extensions = nil
+            converter_run.external_property_file_references = refs
+          end
+          validate_invocation(invocation, converter_run, "#{path}.conversion.invocation", errors, depth: depth)
         end
         conversion.analysis_tool_log_files.try &.each_with_index do |location, i|
-          validate_artifact_location(location, "#{path}.conversion.analysisToolLogFiles[#{i}]", errors)
+          validate_artifact_location(location, run, "#{path}.conversion.analysisToolLogFiles[#{i}]", errors)
         end
       end
-      validate_artifact_location(run.special_locations.try(&.display_base), "#{path}.specialLocations.displayBase", errors)
+      validate_artifact_location(run.special_locations.try(&.display_base), run, "#{path}.specialLocations.displayBase", errors)
 
       if results = run.results
         validate_array_limit(results, max_results, "#{path}.results", "results", errors)
       end
 
-      artifact_count = run.artifacts.try(&.size) || 0
-      logical_location_count = run.logical_locations.try(&.size) || 0
-      if refs = run.external_property_file_references
-        # These arrays may extend past the data already in the root document.
-        artifact_count = 0 if refs.artifacts.try(&.empty?) == false
-        logical_location_count = 0 if refs.logical_locations.try(&.empty?) == false
-      end
+      refs = run.external_property_file_references
 
       graph_edge_ids = {} of Graph => Set(String)
       run.results.try &.each_with_index do |result, j|
         result_path = "#{path}.results[#{j}]"
         validate_result(result, run, result_path, errors, graph_edge_ids, depth: depth + 1)
-        validate_result_index_references(result, result_path, artifact_count, logical_location_count, errors)
       end
 
       validate_enum(run.column_kind, "#{path}.columnKind", errors)
@@ -133,19 +135,19 @@ module Sarif
       end
 
       run.artifacts.try &.each_with_index do |artifact, j|
-        validate_artifact(artifact, "#{path}.artifacts[#{j}]", j, artifact_count, errors)
+        validate_artifact(artifact, run, "#{path}.artifacts[#{j}]", j, errors)
       end
 
       run.version_control_provenance.try &.each_with_index do |vcd, j|
-        validate_version_control_details(vcd, "#{path}.versionControlProvenance[#{j}]", errors)
+        validate_version_control_details(vcd, run, "#{path}.versionControlProvenance[#{j}]", errors)
       end
 
       run.graphs.try &.each_with_index do |graph, j|
-        validate_graph(graph, "#{path}.graphs[#{j}]", errors)
+        validate_graph(graph, run, "#{path}.graphs[#{j}]", errors)
       end
 
       run.thread_flow_locations.try &.each_with_index do |tfl, j|
-        validate_thread_flow_location(tfl, "#{path}.threadFlowLocations[#{j}]", errors)
+        validate_thread_flow_location(tfl, run, "#{path}.threadFlowLocations[#{j}]", errors)
       end
 
       run.addresses.try &.each_with_index do |address, j|
@@ -161,14 +163,14 @@ module Sarif
         validate_min(response.index, NO_INDEX, "#{path}.webResponses[#{j}].index", "index", errors)
       end
 
-      if refs = run.external_property_file_references
-        validate_external_property_file_references(refs, "#{path}.externalPropertyFileReferences", errors)
+      if refs
+        validate_external_property_file_references(refs, run, "#{path}.externalPropertyFileReferences", errors)
       end
 
       validate_guid(run.baseline_guid, "#{path}.baselineGuid", errors)
 
       if base_ids = run.original_uri_base_ids
-        validate_original_uri_base_ids(base_ids, "#{path}.originalUriBaseIds", errors)
+        validate_original_uri_base_ids(base_ids, run, "#{path}.originalUriBaseIds", errors)
       end
 
       if details = run.automation_details
@@ -186,15 +188,19 @@ module Sarif
       validate_guid(details.correlation_guid, "#{path}.correlationGuid", errors)
     end
 
-    private def validate_tool(tool : Tool, path : String, errors : Array(ValidationError))
-      validate_tool_component(tool.driver, "#{path}.driver", errors)
+    private def validate_tool(tool : Tool, run : Run, path : String, errors : Array(ValidationError), *, allow_external_driver : Bool = false)
+      if driver = tool.driver?
+        validate_tool_component(driver, run, "#{path}.driver", errors)
+      elsif !allow_external_driver
+        errors << ValidationError.new("Tool driver must be present", "#{path}.driver")
+      end
 
       tool.extensions.try &.each_with_index do |ext, i|
-        validate_tool_component(ext, "#{path}.extensions[#{i}]", errors)
+        validate_tool_component(ext, run, "#{path}.extensions[#{i}]", errors)
       end
     end
 
-    private def validate_tool_component(component : ToolComponent, path : String, errors : Array(ValidationError))
+    private def validate_tool_component(component : ToolComponent, run : Run, path : String, errors : Array(ValidationError))
       if component.name.empty?
         errors << ValidationError.new("Tool driver name must not be empty", "#{path}.name")
       end
@@ -209,7 +215,7 @@ module Sarif
         validate_tool_component_reference(taxonomy, "#{path}.supportedTaxonomies[#{i}]", errors)
       end
       component.locations.try &.each_with_index do |location, i|
-        validate_artifact_location(location, "#{path}.locations[#{i}]", errors)
+        validate_artifact_location(location, run, "#{path}.locations[#{i}]", errors)
       end
       if metadata = component.translation_metadata
         validate_uri(metadata.download_uri, "#{path}.translationMetadata.downloadUri", errors)
@@ -272,7 +278,9 @@ module Sarif
         )
       end
       validate_message_arguments(result.message, "#{path}.message", errors) do |id|
-        component = run.tool_component_for(result.rule.try(&.tool_component))
+        reference = result.rule.try(&.tool_component)
+        component = run.tool_component_for(reference)
+        next nil if tool_component_pending?(run, reference, component)
         result.resolve_rule(run).try(&.message_strings).try(&.[id]?) ||
           component.try(&.global_message_strings).try(&.[id]?)
       end
@@ -304,7 +312,7 @@ module Sarif
 
       validate_guid(result.guid, "#{path}.guid", errors)
       validate_guid(result.correlation_guid, "#{path}.correlationGuid", errors)
-      validate_artifact_location(result.analysis_target, "#{path}.analysisTarget", errors)
+      validate_artifact_location(result.analysis_target, run, "#{path}.analysisTarget", errors)
       validate_min(result.web_request.try(&.index), NO_INDEX, "#{path}.webRequest.index", "index", errors)
       validate_min(result.web_response.try(&.index), NO_INDEX, "#{path}.webResponse.index", "index", errors)
 
@@ -323,19 +331,19 @@ module Sarif
       end
 
       result.locations.try &.each_with_index do |loc, k|
-        validate_location(loc, "#{path}.locations[#{k}]", errors)
+        validate_location(loc, run, "#{path}.locations[#{k}]", errors)
       end
 
       result.related_locations.try &.each_with_index do |loc, k|
-        validate_location(loc, "#{path}.relatedLocations[#{k}]", errors)
+        validate_location(loc, run, "#{path}.relatedLocations[#{k}]", errors)
       end
 
       result.code_flows.try &.each_with_index do |cf, k|
-        validate_code_flow(cf, "#{path}.codeFlows[#{k}]", errors)
+        validate_code_flow(cf, run, "#{path}.codeFlows[#{k}]", errors)
       end
 
       result.graphs.try &.each_with_index do |graph, k|
-        validate_graph(graph, "#{path}.graphs[#{k}]", errors)
+        validate_graph(graph, run, "#{path}.graphs[#{k}]", errors)
       end
 
       result.graph_traversals.try &.each_with_index do |gt, k|
@@ -343,17 +351,17 @@ module Sarif
       end
 
       result.stacks.try &.each_with_index do |stack, k|
-        validate_stack(stack, "#{path}.stacks[#{k}]", errors)
+        validate_stack(stack, run, "#{path}.stacks[#{k}]", errors)
       end
 
       result.fixes.try &.each_with_index do |fix, k|
-        validate_fix(fix, "#{path}.fixes[#{k}]", errors)
+        validate_fix(fix, run, "#{path}.fixes[#{k}]", errors)
       end
 
       result.attachments.try &.each_with_index do |attachment, k|
         attachment_path = "#{path}.attachments[#{k}]"
         validate_message_arguments(attachment.description, "#{attachment_path}.description", errors)
-        validate_artifact_location(attachment.artifact_location, "#{attachment_path}.artifactLocation", errors)
+        validate_artifact_location(attachment.artifact_location, run, "#{attachment_path}.artifactLocation", errors)
         attachment.regions.try &.each_with_index do |region, i|
           validate_region(region, "#{attachment_path}.regions[#{i}]", errors)
         end
@@ -363,11 +371,11 @@ module Sarif
       end
 
       result.suppressions.try &.each_with_index do |suppression, k|
-        validate_suppression(suppression, "#{path}.suppressions[#{k}]", errors)
+        validate_suppression(suppression, run, "#{path}.suppressions[#{k}]", errors)
       end
 
       if provenance = result.provenance
-        validate_result_provenance(provenance, "#{path}.provenance", errors)
+        validate_result_provenance(provenance, run, "#{path}.provenance", errors)
       end
     end
 
@@ -391,9 +399,16 @@ module Sarif
         identified = !result.rule_id.nil? || !result.rule_index.nil?
         validate_descriptor_reference(reference, "#{path}.rule", errors, identified: identified)
       end
+      validate_min(result.rule_index, NO_INDEX, "#{path}.ruleIndex", "ruleIndex", errors)
+      validate_result_rule_descriptor(result, run, path, errors)
+      validate_result_rule_consistency(reference, result, path, errors) if reference
+    end
 
+    private def validate_result_rule_descriptor(result : Result, run : Run, path : String, errors : Array(ValidationError))
+      reference = result.rule
       component_reference = reference.try(&.tool_component)
       component = run.tool_component_for(component_reference)
+      return if tool_component_pending?(run, component_reference, component)
       unless component
         errors << ValidationError.new(
           "rule.toolComponent does not identify a tool component of this run",
@@ -411,30 +426,34 @@ module Sarif
                                   {"rule.index", reference.try(&.index)}
                                 end
 
-      # A negative `rule.index` is reported by `validate_descriptor_reference`.
-      validate_min(result.rule_index, NO_INDEX, "#{path}.ruleIndex", "ruleIndex", errors)
-
+      guid = reference.try(&.guid)
       if rule_index && rule_index >= 0
-        if rules && rule_index < rules.size
-          descriptor = rules[rule_index]
-          # Both ids have to identify the descriptor (§3.27.5, §3.52.4).
-          {"ruleId" => result.rule_id, "rule.id" => reference.try(&.id)}.each do |id_label, rule_id|
-            next if rule_id.nil? || descriptor.matches_id?(rule_id)
+        if descriptor = rules.try(&.[rule_index]?)
+          if guid && GUID_PATTERN.matches?(guid) &&
+             descriptor.guid.try(&.compare(guid, case_insensitive: true)) != 0
             errors << ValidationError.new(
-              "#{id_label} '#{rule_id}' does not match rule at #{index_label} #{rule_index} ('#{descriptor.id}')",
-              "#{path}.#{id_label}"
+              "rule.guid '#{guid}' does not match rule at #{index_label} #{rule_index} ('#{descriptor.id}')",
+              "#{path}.rule.guid"
             )
           end
+          validate_result_rule_ids(result, descriptor, "at #{index_label} #{rule_index}", path, errors)
         else
           errors << ValidationError.new(
             "Invalid #{index_label}: #{rule_index}",
             "#{path}.#{index_label}"
           )
         end
+      elsif guid && GUID_PATTERN.matches?(guid)
+        if descriptor = rules.try(&.find { |rule| rule.guid.try(&.compare(guid, case_insensitive: true)) == 0 })
+          validate_result_rule_ids(result, descriptor, "with GUID #{guid}", path, errors)
+        else
+          errors << ValidationError.new("rule.guid '#{guid}' does not identify a rule", "#{path}.rule.guid")
+        end
       end
+    end
 
-      return unless reference
-
+    private def validate_result_rule_consistency(reference : ReportingDescriptorReference, result : Result,
+                                                 path : String, errors : Array(ValidationError))
       if (reference_id = reference.id) && (result_rule_id = result.rule_id) && reference_id != result_rule_id
         errors << ValidationError.new(
           "rule.id '#{reference_id}' must equal ruleId '#{result_rule_id}'",
@@ -447,6 +466,31 @@ module Sarif
           "rule.index #{reference_index} must equal ruleIndex #{result_rule_index}",
           "#{path}.rule.index"
         )
+      end
+    end
+
+    private def validate_result_rule_ids(result : Result, descriptor : ReportingDescriptor, source : String,
+                                         path : String, errors : Array(ValidationError))
+      # Both ids have to identify the descriptor (§3.27.5, §3.52.4).
+      {"ruleId" => result.rule_id, "rule.id" => result.rule.try(&.id)}.each do |label, rule_id|
+        next if rule_id.nil? || descriptor.matches_id?(rule_id)
+        errors << ValidationError.new("#{label} '#{rule_id}' does not match rule #{source} ('#{descriptor.id}')", "#{path}.#{label}")
+      end
+    end
+
+    private def tool_component_pending?(run : Run, reference : ToolComponentReference?, component : ToolComponent?) : Bool
+      return false unless refs = run.external_property_file_references
+      if component
+        return !!(refs.driver && run.tool.driver?.try(&.same?(component)))
+      end
+
+      extensions_external = refs.extensions.try(&.empty?) == false
+      if (index = reference.try(&.index)) && index >= 0
+        extensions_external
+      elsif reference.try(&.guid)
+        !refs.driver.nil? || extensions_external
+      else
+        !refs.driver.nil?
       end
     end
 
@@ -552,26 +596,28 @@ module Sarif
       max
     end
 
-    private def validate_suppression(suppression : Suppression, path : String,
+    private def validate_suppression(suppression : Suppression, run : Run, path : String,
                                      errors : Array(ValidationError))
       validate_enum(suppression.kind, "#{path}.kind", errors)
       validate_enum(suppression.status, "#{path}.status", errors)
       validate_guid(suppression.guid, "#{path}.guid", errors)
 
       if location = suppression.location
-        validate_location(location, "#{path}.location", errors)
+        validate_location(location, run, "#{path}.location", errors)
       end
     end
 
-    private def validate_result_provenance(provenance : ResultProvenance, path : String,
+    private def validate_result_provenance(provenance : ResultProvenance, run : Run, path : String,
                                            errors : Array(ValidationError))
       first = validate_timestamp(provenance.first_detection_time_utc, "#{path}.firstDetectionTimeUtc", errors)
       last = validate_timestamp(provenance.last_detection_time_utc, "#{path}.lastDetectionTimeUtc", errors)
       validate_guid(provenance.first_detection_run_guid, "#{path}.firstDetectionRunGuid", errors)
       validate_guid(provenance.last_detection_run_guid, "#{path}.lastDetectionRunGuid", errors)
       validate_min(provenance.invocation_index, NO_INDEX, "#{path}.invocationIndex", "invocationIndex", errors)
+      count = reference_count(run.invocations, run.external_property_file_references.try(&.invocations))
+      validate_index_bound(provenance.invocation_index, count, "#{path}.invocationIndex", "invocationIndex", errors)
       provenance.conversion_sources.try &.each_with_index do |source, i|
-        validate_physical_location(source, "#{path}.conversionSources[#{i}]", errors)
+        validate_physical_location(source, run, "#{path}.conversionSources[#{i}]", errors)
       end
 
       if first && last && first > last
@@ -582,16 +628,16 @@ module Sarif
       end
     end
 
-    private def validate_exception(exception : SarifException, path : String,
+    private def validate_exception(exception : SarifException, run : Run, path : String,
                                    errors : Array(ValidationError), *, depth : Int32)
       return unless check_depth!(path, depth, errors)
 
       if ex_stack = exception.stack
-        validate_stack(ex_stack, "#{path}.stack", errors)
+        validate_stack(ex_stack, run, "#{path}.stack", errors)
       end
 
       exception.inner_exceptions.try &.each_with_index do |inner, i|
-        validate_exception(inner, "#{path}.innerExceptions[#{i}]", errors, depth: depth + 1)
+        validate_exception(inner, run, "#{path}.innerExceptions[#{i}]", errors, depth: depth + 1)
       end
     end
 
@@ -608,10 +654,10 @@ module Sarif
       end
 
       {% for field in %w(executable_location working_directory stdin stdout stderr stdout_stderr) %}
-        validate_artifact_location(inv.{{field.id}}, "#{path}." + {{field.camelcase(lower: true)}}, errors)
+        validate_artifact_location(inv.{{field.id}}, run, "#{path}." + {{field.camelcase(lower: true)}}, errors)
       {% end %}
       inv.response_files.try &.each_with_index do |location, i|
-        validate_artifact_location(location, "#{path}.responseFiles[#{i}]", errors)
+        validate_artifact_location(location, run, "#{path}.responseFiles[#{i}]", errors)
       end
 
       inv.rule_configuration_overrides.try &.each_with_index do |override, i|
@@ -647,7 +693,9 @@ module Sarif
       end
       validate_message_arguments(notif.message, "#{path}.message", errors) do |id|
         reference = notif.descriptor
-        component = run.tool_component_for(reference.try(&.tool_component))
+        component_reference = reference.try(&.tool_component)
+        component = run.tool_component_for(component_reference)
+        next nil if tool_component_pending?(run, component_reference, component)
         # §3.52.3 lookup, then the same id fallback `Result#resolve_rule` uses
         # (sarif-sdk style descriptors carry only an id).
         descriptor = reference.try { |ref| run.resolve_notification_reference(ref) } ||
@@ -667,19 +715,18 @@ module Sarif
       end
 
       notif.locations.try &.each_with_index do |loc, i|
-        validate_location(loc, "#{path}.locations[#{i}]", errors)
+        validate_location(loc, run, "#{path}.locations[#{i}]", errors)
       end
 
       if ex = notif.sarif_exception
-        validate_exception(ex, "#{path}.exception", errors, depth: depth)
+        validate_exception(ex, run, "#{path}.exception", errors, depth: depth)
       end
     end
 
-    private def validate_artifact(artifact : Artifact, path : String,
-                                  artifact_index : Int32, artifact_count : Int32,
+    private def validate_artifact(artifact : Artifact, run : Run, path : String, artifact_index : Int32,
                                   errors : Array(ValidationError))
       validate_message_arguments(artifact.description, "#{path}.description", errors)
-      validate_artifact_location(artifact.location, "#{path}.location", errors)
+      validate_artifact_location(artifact.location, run, "#{path}.location", errors)
       if (length = artifact.length) && length < -1
         errors << ValidationError.new(
           "artifact length must be >= -1, got #{length}",
@@ -696,6 +743,7 @@ module Sarif
 
       # -1 is the schema default and means "this artifact has no parent".
       if pi = artifact.parent_index
+        artifact_count = reference_count(run.artifacts, run.external_property_file_references.try(&.artifacts))
         if pi < NO_INDEX
           errors << ValidationError.new(
             "artifact parentIndex must be >= -1, got #{pi}",
@@ -706,7 +754,7 @@ module Sarif
             "artifact parentIndex #{pi} must not reference the artifact itself",
             "#{path}.parentIndex"
           )
-        elsif pi != NO_INDEX && artifact_count > 0 && pi >= artifact_count
+        elsif pi != NO_INDEX && artifact_count && pi >= artifact_count
           errors << ValidationError.new(
             "artifact parentIndex #{pi} is out of range (#{artifact_count} artifacts defined)",
             "#{path}.parentIndex"
@@ -722,7 +770,7 @@ module Sarif
       validate_timestamp(artifact.last_modified_time_utc, "#{path}.lastModifiedTimeUtc", errors)
     end
 
-    private def validate_version_control_details(vcd : VersionControlDetails, path : String, errors : Array(ValidationError))
+    private def validate_version_control_details(vcd : VersionControlDetails, run : Run, path : String, errors : Array(ValidationError))
       if vcd.repository_uri.empty?
         errors << ValidationError.new(
           "repositoryUri must not be empty",
@@ -733,10 +781,10 @@ module Sarif
       end
 
       validate_timestamp(vcd.as_of_time_utc, "#{path}.asOfTimeUtc", errors)
-      validate_artifact_location(vcd.mapped_to, "#{path}.mappedTo", errors)
+      validate_artifact_location(vcd.mapped_to, run, "#{path}.mappedTo", errors)
     end
 
-    private def validate_code_flow(code_flow : CodeFlow, path : String, errors : Array(ValidationError))
+    private def validate_code_flow(code_flow : CodeFlow, run : Run, path : String, errors : Array(ValidationError))
       validate_message_arguments(code_flow.message, "#{path}.message", errors)
       if code_flow.thread_flows.empty?
         errors << ValidationError.new(
@@ -755,12 +803,12 @@ module Sarif
         end
 
         tf.locations.each_with_index do |tfl, j|
-          validate_thread_flow_location(tfl, "#{path}.threadFlows[#{i}].locations[#{j}]", errors)
+          validate_thread_flow_location(tfl, run, "#{path}.threadFlows[#{i}].locations[#{j}]", errors)
         end
       end
     end
 
-    private def validate_thread_flow_location(tfl : ThreadFlowLocation, path : String,
+    private def validate_thread_flow_location(tfl : ThreadFlowLocation, run : Run, path : String,
                                               errors : Array(ValidationError))
       validate_min(tfl.index, NO_INDEX, "#{path}.index", "index", errors)
       validate_min(tfl.nesting_level, 0, "#{path}.nestingLevel", "nestingLevel", errors)
@@ -771,17 +819,17 @@ module Sarif
       validate_min(tfl.web_request.try(&.index), NO_INDEX, "#{path}.webRequest.index", "index", errors)
       validate_min(tfl.web_response.try(&.index), NO_INDEX, "#{path}.webResponse.index", "index", errors)
       if stack = tfl.stack
-        validate_stack(stack, "#{path}.stack", errors)
+        validate_stack(stack, run, "#{path}.stack", errors)
       end
       tfl.taxa.try &.each_with_index do |taxon, k|
         validate_descriptor_reference(taxon, "#{path}.taxa[#{k}]", errors)
       end
       if location = tfl.location
-        validate_location(location, "#{path}.location", errors)
+        validate_location(location, run, "#{path}.location", errors)
       end
     end
 
-    private def validate_fix(fix : Fix, path : String, errors : Array(ValidationError))
+    private def validate_fix(fix : Fix, run : Run, path : String, errors : Array(ValidationError))
       validate_message_arguments(fix.description, "#{path}.description", errors)
       if fix.artifact_changes.empty?
         errors << ValidationError.new(
@@ -791,7 +839,7 @@ module Sarif
       end
 
       fix.artifact_changes.each_with_index do |change, i|
-        validate_artifact_location(change.artifact_location, "#{path}.artifactChanges[#{i}].artifactLocation", errors)
+        validate_artifact_location(change.artifact_location, run, "#{path}.artifactChanges[#{i}].artifactLocation", errors)
         if change.replacements.empty?
           errors << ValidationError.new(
             "artifactChange must have at least one replacement",
@@ -809,7 +857,7 @@ module Sarif
       end
     end
 
-    private def validate_location(location : Location, path : String,
+    private def validate_location(location : Location, run : Run, path : String,
                                   errors : Array(ValidationError))
       validate_min(location.id, NO_INDEX, "#{path}.id", "location id", errors)
       validate_message_arguments(location.message, "#{path}.message", errors)
@@ -818,12 +866,17 @@ module Sarif
         validate_unique_values(relationship.kinds, "#{path}.relationships[#{i}].kinds", errors)
         validate_message_arguments(relationship.description, "#{path}.relationships[#{i}].description", errors)
       end
-      location.logical_locations.try &.each_with_index do |logical, i|
-        validate_logical_location(logical, "#{path}.logicalLocations[#{i}]", errors)
+      if logical_locations = location.logical_locations
+        count = reference_count(run.logical_locations, run.external_property_file_references.try(&.logical_locations))
+        logical_locations.each_with_index do |logical, i|
+          logical_path = "#{path}.logicalLocations[#{i}]"
+          validate_logical_location(logical, logical_path, errors)
+          validate_index_bound(logical.index, count, "#{logical_path}.index", "logicalLocation index", errors)
+        end
       end
 
       if physical = location.physical_location
-        validate_physical_location(physical, "#{path}.physicalLocation", errors)
+        validate_physical_location(physical, run, "#{path}.physicalLocation", errors)
       end
 
       location.annotations.try &.each_with_index do |annotated_region, i|
@@ -831,7 +884,7 @@ module Sarif
       end
     end
 
-    private def validate_physical_location(physical : PhysicalLocation, path : String,
+    private def validate_physical_location(physical : PhysicalLocation, run : Run, path : String,
                                            errors : Array(ValidationError))
       if physical.artifact_location.nil? && physical.address.nil?
         errors << ValidationError.new(
@@ -840,7 +893,7 @@ module Sarif
         )
       end
 
-      validate_artifact_location(physical.artifact_location, "#{path}.artifactLocation", errors)
+      validate_artifact_location(physical.artifact_location, run, "#{path}.artifactLocation", errors)
       if address = physical.address
         validate_address(address, "#{path}.address", errors)
       end
@@ -862,9 +915,13 @@ module Sarif
       end
     end
 
-    private def validate_artifact_location(location : ArtifactLocation?, path : String, errors : Array(ValidationError))
+    private def validate_artifact_location(location : ArtifactLocation?, run : Run, path : String, errors : Array(ValidationError))
       return unless location
-      validate_min(location.index, NO_INDEX, "#{path}.index", "index", errors)
+      if index = location.index
+        count = reference_count(run.artifacts, run.external_property_file_references.try(&.artifacts))
+        validate_min(index, NO_INDEX, "#{path}.index", "index", errors)
+        validate_index_bound(index, count, "#{path}.index", "artifact index", errors)
+      end
       validate_message_arguments(location.description, "#{path}.description", errors)
     end
 
@@ -1050,12 +1107,12 @@ module Sarif
     # must not have one; a `uri` ends with "/", has no query, fragment or ".."
     # segment; and the `uriBaseId` chains must not loop. A `uriBaseId` naming
     # no entry is not an error, since the consumer may supply it (§3.4.4).
-    private def validate_original_uri_base_ids(base_ids : Hash(String, ArtifactLocation), path : String,
+    private def validate_original_uri_base_ids(base_ids : Hash(String, ArtifactLocation), run : Run, path : String,
                                                errors : Array(ValidationError))
       loops = uri_base_id_loops(base_ids)
       base_ids.each do |name, location|
         entry_path = "#{path}.#{name}"
-        validate_artifact_location(location, entry_path, errors)
+        validate_artifact_location(location, run, entry_path, errors)
         uri = location.uri
         absolute = uri && URI_PATTERN.matches?(uri)
         if uri && !absolute && location.uri_base_id.nil?
@@ -1146,23 +1203,23 @@ module Sarif
       end
     end
 
-    private def validate_stack(stack : Stack, path : String,
+    private def validate_stack(stack : Stack, run : Run, path : String,
                                errors : Array(ValidationError))
       validate_message_arguments(stack.message, "#{path}.message", errors)
       stack.frames.each_with_index do |frame, i|
         if location = frame.location
-          validate_location(location, "#{path}.frames[#{i}].location", errors)
+          validate_location(location, run, "#{path}.frames[#{i}].location", errors)
         end
       end
     end
 
-    private def validate_graph(graph : Graph, path : String,
+    private def validate_graph(graph : Graph, run : Run, path : String,
                                errors : Array(ValidationError))
       validate_message_arguments(graph.description, "#{path}.description", errors)
       node_ids = Set(String).new
       if nodes = graph.nodes
         nodes.each_with_index do |node, i|
-          validate_node(node, "#{path}.nodes[#{i}]", node_ids, errors, depth: 1)
+          validate_node(node, run, "#{path}.nodes[#{i}]", node_ids, errors, depth: 1)
         end
       end
 
@@ -1174,7 +1231,7 @@ module Sarif
       end
     end
 
-    private def validate_node(node : Node, path : String, seen_ids : Set(String),
+    private def validate_node(node : Node, run : Run, path : String, seen_ids : Set(String),
                               errors : Array(ValidationError), *, depth : Int32)
       validate_message_arguments(node.label, "#{path}.label", errors)
       # Bound recursion through node.children so a malformed SARIF graph
@@ -1196,11 +1253,11 @@ module Sarif
       end
 
       if location = node.location
-        validate_location(location, "#{path}.location", errors)
+        validate_location(location, run, "#{path}.location", errors)
       end
 
       node.children.try &.each_with_index do |child, i|
-        validate_node(child, "#{path}.children[#{i}]", seen_ids, errors, depth: depth + 1)
+        validate_node(child, run, "#{path}.children[#{i}]", seen_ids, errors, depth: depth + 1)
       end
     end
 
@@ -1226,7 +1283,7 @@ module Sarif
           "edge sourceNodeId must not be empty",
           "#{path}.sourceNodeId"
         )
-      elsif !node_ids.empty? && !node_ids.includes?(edge.source_node_id)
+      elsif !node_ids.includes?(edge.source_node_id)
         errors << ValidationError.new(
           "edge sourceNodeId '#{edge.source_node_id}' references unknown node",
           "#{path}.sourceNodeId"
@@ -1238,7 +1295,7 @@ module Sarif
           "edge targetNodeId must not be empty",
           "#{path}.targetNodeId"
         )
-      elsif !node_ids.empty? && !node_ids.includes?(edge.target_node_id)
+      elsif !node_ids.includes?(edge.target_node_id)
         errors << ValidationError.new(
           "edge targetNodeId '#{edge.target_node_id}' references unknown node",
           "#{path}.targetNodeId"
@@ -1258,105 +1315,72 @@ module Sarif
       end
     end
 
-    private def validate_result_index_references(result : Result, path : String,
-                                                 artifact_count : Int32, logical_location_count : Int32,
-                                                 errors : Array(ValidationError))
-      # Validate artifact index references in locations
-      result.locations.try &.each_with_index do |loc, k|
-        validate_location_index_references(loc, "#{path}.locations[#{k}]", artifact_count, logical_location_count, errors)
-      end
+    # The default for an absent array is empty (§3.7.2). A reference to
+    # external data leaves the upper bound unknown until resolution.
+    private def reference_count(items : Array?, external : Array(ExternalPropertyFileReference)?) : Int32?
+      return if external && !external.empty?
+      items.try(&.size) || 0
+    end
 
-      result.related_locations.try &.each_with_index do |loc, k|
-        validate_location_index_references(loc, "#{path}.relatedLocations[#{k}]", artifact_count, logical_location_count, errors)
-      end
-
-      if target = result.analysis_target
-        validate_artifact_location_index(target, "#{path}.analysisTarget", artifact_count, errors)
+    private def validate_index_bound(index : Int32?, count : Int32?, path : String, name : String, errors : Array(ValidationError))
+      if index && index >= 0 && count && index >= count
+        errors << ValidationError.new("#{name} #{index} is out of range (#{count} entries defined)", path)
       end
     end
 
-    private def validate_location_index_references(location : Location, path : String,
-                                                   artifact_count : Int32, logical_location_count : Int32,
-                                                   errors : Array(ValidationError))
-      if physical = location.physical_location
-        if artifact_loc = physical.artifact_location
-          validate_artifact_location_index(artifact_loc, "#{path}.physicalLocation.artifactLocation", artifact_count, errors)
-        end
-      end
-
-      location.logical_locations.try &.each_with_index do |ll, i|
-        if (idx = ll.index) && idx >= 0 && logical_location_count > 0 && idx >= logical_location_count
-          errors << ValidationError.new(
-            "logicalLocation index #{idx} is out of range (#{logical_location_count} logical locations defined)",
-            "#{path}.logicalLocations[#{i}].index"
-          )
-        end
-      end
-    end
-
-    private def validate_artifact_location_index(artifact_loc : ArtifactLocation, path : String,
-                                                 artifact_count : Int32, errors : Array(ValidationError))
-      if (idx = artifact_loc.index) && idx >= 0 && artifact_count > 0 && idx >= artifact_count
-        errors << ValidationError.new(
-          "artifact index #{idx} is out of range (#{artifact_count} artifacts defined)",
-          "#{path}.index"
-        )
-      end
-    end
-
-    private def validate_external_property_file_references(refs : ExternalPropertyFileReferences, path : String,
+    private def validate_external_property_file_references(refs : ExternalPropertyFileReferences, run : Run, path : String,
                                                            errors : Array(ValidationError))
       if conversion = refs.conversion
-        validate_external_property_file_reference(conversion, "#{path}.conversion", errors, object: true)
+        validate_external_property_file_reference(conversion, run, "#{path}.conversion", errors, object: true)
       end
       refs.graphs.try &.each_with_index do |item, i|
-        validate_external_property_file_reference(item, "#{path}.graphs[#{i}]", errors)
+        validate_external_property_file_reference(item, run, "#{path}.graphs[#{i}]", errors)
       end
       if ext_props = refs.externalized_properties
-        validate_external_property_file_reference(ext_props, "#{path}.externalizedProperties", errors, object: true)
+        validate_external_property_file_reference(ext_props, run, "#{path}.externalizedProperties", errors, object: true)
       end
       refs.artifacts.try &.each_with_index do |item, i|
-        validate_external_property_file_reference(item, "#{path}.artifacts[#{i}]", errors)
+        validate_external_property_file_reference(item, run, "#{path}.artifacts[#{i}]", errors)
       end
       refs.invocations.try &.each_with_index do |item, i|
-        validate_external_property_file_reference(item, "#{path}.invocations[#{i}]", errors)
+        validate_external_property_file_reference(item, run, "#{path}.invocations[#{i}]", errors)
       end
       refs.logical_locations.try &.each_with_index do |item, i|
-        validate_external_property_file_reference(item, "#{path}.logicalLocations[#{i}]", errors)
+        validate_external_property_file_reference(item, run, "#{path}.logicalLocations[#{i}]", errors)
       end
       refs.thread_flow_locations.try &.each_with_index do |item, i|
-        validate_external_property_file_reference(item, "#{path}.threadFlowLocations[#{i}]", errors)
+        validate_external_property_file_reference(item, run, "#{path}.threadFlowLocations[#{i}]", errors)
       end
       refs.results.try &.each_with_index do |item, i|
-        validate_external_property_file_reference(item, "#{path}.results[#{i}]", errors)
+        validate_external_property_file_reference(item, run, "#{path}.results[#{i}]", errors)
       end
       refs.taxonomies.try &.each_with_index do |item, i|
-        validate_external_property_file_reference(item, "#{path}.taxonomies[#{i}]", errors)
+        validate_external_property_file_reference(item, run, "#{path}.taxonomies[#{i}]", errors)
       end
       refs.addresses.try &.each_with_index do |item, i|
-        validate_external_property_file_reference(item, "#{path}.addresses[#{i}]", errors)
+        validate_external_property_file_reference(item, run, "#{path}.addresses[#{i}]", errors)
       end
       if driver = refs.driver
-        validate_external_property_file_reference(driver, "#{path}.driver", errors, object: true)
+        validate_external_property_file_reference(driver, run, "#{path}.driver", errors, object: true)
       end
       refs.extensions.try &.each_with_index do |item, i|
-        validate_external_property_file_reference(item, "#{path}.extensions[#{i}]", errors)
+        validate_external_property_file_reference(item, run, "#{path}.extensions[#{i}]", errors)
       end
       refs.policies.try &.each_with_index do |item, i|
-        validate_external_property_file_reference(item, "#{path}.policies[#{i}]", errors)
+        validate_external_property_file_reference(item, run, "#{path}.policies[#{i}]", errors)
       end
       refs.translations.try &.each_with_index do |item, i|
-        validate_external_property_file_reference(item, "#{path}.translations[#{i}]", errors)
+        validate_external_property_file_reference(item, run, "#{path}.translations[#{i}]", errors)
       end
       refs.web_requests.try &.each_with_index do |item, i|
-        validate_external_property_file_reference(item, "#{path}.webRequests[#{i}]", errors)
+        validate_external_property_file_reference(item, run, "#{path}.webRequests[#{i}]", errors)
       end
       refs.web_responses.try &.each_with_index do |item, i|
-        validate_external_property_file_reference(item, "#{path}.webResponses[#{i}]", errors)
+        validate_external_property_file_reference(item, run, "#{path}.webResponses[#{i}]", errors)
       end
     end
 
-    private def validate_external_property_file_reference(ref : ExternalPropertyFileReference, path : String,
+    private def validate_external_property_file_reference(ref : ExternalPropertyFileReference, run : Run, path : String,
                                                           errors : Array(ValidationError), *, object : Bool = false)
       if ref.location.nil? && ref.guid.nil?
         errors << ValidationError.new(
@@ -1366,7 +1390,7 @@ module Sarif
       end
 
       validate_guid(ref.guid, "#{path}.guid", errors)
-      validate_artifact_location(ref.location, "#{path}.location", errors)
+      validate_artifact_location(ref.location, run, "#{path}.location", errors)
       if object && ref.item_count
         errors << ValidationError.new("itemCount must be absent for an object-valued property", "#{path}.itemCount")
       else

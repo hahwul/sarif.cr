@@ -208,6 +208,27 @@ describe Sarif::Result do
   end
 
   describe "#effective_level configuration overrides (SARIF 2.1.0 §3.27.10)" do
+    it "uses the sole invocation when invocationIndex is omitted" do
+      log = Sarif.parse!(<<-JSON)
+        {"version":"2.1.0","runs":[{"tool":{"driver":{"name":"T","rules":[{"id":"R",
+          "defaultConfiguration":{"level":"note"}}]}},"invocations":[{"executionSuccessful":true,
+          "ruleConfigurationOverrides":[{"descriptor":{"index":0},"configuration":{"level":"error"}}]}],
+          "results":[{"ruleIndex":0,"message":{"text":"default"},"provenance":{}},
+            {"ruleIndex":0,"message":{"text":"no provenance"}},
+            {"ruleIndex":0,"message":{"text":"unknown"},"provenance":{"invocationIndex":-1}}]}]}
+        JSON
+      run = log.runs!.first
+      log.find_results(level: Sarif::Level::Error).map(&.message.text).should eq(["default", "no provenance"])
+      log.find_results(level: Sarif::Level::Note).map(&.message.text).should eq(["unknown"])
+      run.external_property_file_references = Sarif::ExternalPropertyFileReferences.new(
+        invocations: [Sarif::ExternalPropertyFileReference.new(location: Sarif::ArtifactLocation.new(uri: "more.json"))]
+      )
+      log.find_results(level: Sarif::Level::Error).should be_empty
+      run.external_property_file_references = nil
+      run.invocations.not_nil! << Sarif::Invocation.new(execution_successful: true)
+      log.find_results(level: Sarif::Level::Error).should be_empty
+    end
+
     it "prefers a ruleConfigurationOverride reachable through provenance.invocationIndex" do
       rule = Sarif::ReportingDescriptor.new(
         id: "RULE001",
