@@ -24,6 +24,59 @@ module Sarif
     # out of range.
     private NO_INDEX = -1
 
+    # Location IDs are shared across the objects belonging to one result.
+    # Resolve relationships after visiting those locations (§3.28.2, §3.34.2).
+    private class ResultLocationReferences
+      @ids = Set(Int32).new
+      @targets = [] of Tuple(Int32, String)
+      @cached_indexes = Set(Int32).new
+
+      property complete = true
+
+      def initialize(@run_path : String)
+      end
+
+      def add(location : Location, path : String, errors : Array(ValidationError))
+        if (id = location.id) && id >= 0 && !@ids.add?(id)
+          errors << ValidationError.new("Duplicate location id #{id} in this result", "#{path}.id")
+        end
+
+        location.relationships.try &.each_with_index do |relationship, i|
+          target = relationship.target
+          next if target < 0
+          target_path = "#{path}.relationships[#{i}].target"
+          if target == location.id
+            errors << ValidationError.new("Location relationship must target a different location", target_path)
+          else
+            @targets << {target, target_path}
+          end
+        end
+      end
+
+      def add_cached(index : Int32, cached : ThreadFlowLocation, errors : Array(ValidationError))
+        # A result can visit the same cached location multiple times.
+        return unless @cached_indexes.add?(index)
+        path = "#{@run_path}.threadFlowLocations[#{index}]"
+        if location = cached.location
+          add(location, "#{path}.location", errors)
+        end
+        cached.stack.try(&.frames).try &.each_with_index do |frame, i|
+          if location = frame.location
+            add(location, "#{path}.stack.frames[#{i}].location", errors)
+          end
+        end
+      end
+
+      def validate_targets(errors : Array(ValidationError))
+        return unless complete
+        @targets.each do |target, path|
+          unless @ids.includes?(target)
+            errors << ValidationError.new("No location with id #{target} in this result", path)
+          end
+        end
+      end
+    end
+
     getter max_results : Int32?
     getter max_runs : Int32?
     getter max_depth : Int32
@@ -125,7 +178,7 @@ module Sarif
       graph_edge_ids = {} of Graph => Set(String)
       run.results.try &.each_with_index do |result, j|
         result_path = "#{path}.results[#{j}]"
-        validate_result(result, run, result_path, errors, graph_edge_ids, depth: depth + 1)
+        validate_result(result, run, result_path, errors, graph_edge_ids, run_path: path, depth: depth + 1)
       end
 
       validate_enum(run.column_kind, "#{path}.columnKind", errors)
@@ -183,7 +236,7 @@ module Sarif
 
     private def validate_automation_details(details : RunAutomationDetails, path : String,
                                             errors : Array(ValidationError))
-      validate_message_arguments(details.description, "#{path}.description", errors)
+      validate_message(details.description, "#{path}.description", errors)
       validate_guid(details.guid, "#{path}.guid", errors)
       validate_guid(details.correlation_guid, "#{path}.correlationGuid", errors)
     end
@@ -263,21 +316,15 @@ module Sarif
 
       descriptor.relationships.try &.each_with_index do |relationship, i|
         validate_descriptor_reference(relationship.target, "#{path}.relationships[#{i}].target", errors)
-        validate_message_arguments(relationship.description, "#{path}.relationships[#{i}].description", errors)
+        validate_message(relationship.description, "#{path}.relationships[#{i}].description", errors)
       end
     end
 
     private def validate_result(result : Result, run : Run, path : String,
-                                errors : Array(ValidationError), graph_edge_ids : Hash(Graph, Set(String)), *, depth : Int32)
+                                errors : Array(ValidationError), graph_edge_ids : Hash(Graph, Set(String)), *, run_path : String, depth : Int32)
       return unless check_depth!(path, depth, errors)
 
-      if result.message.text.nil? && result.message.id.nil?
-        errors << ValidationError.new(
-          "Result message must have either text or id",
-          "#{path}.message"
-        )
-      end
-      validate_message_arguments(result.message, "#{path}.message", errors) do |id|
+      validate_message(result.message, "#{path}.message", errors, label: "Result message") do |id|
         reference = result.rule.try(&.tool_component)
         component = run.tool_component_for(reference)
         next nil if tool_component_pending?(run, reference, component)
@@ -330,20 +377,21 @@ module Sarif
         )
       end
 
+      references = ResultLocationReferences.new(run_path)
       result.locations.try &.each_with_index do |loc, k|
-        validate_location(loc, run, "#{path}.locations[#{k}]", errors)
+        validate_location(loc, run, "#{path}.locations[#{k}]", errors, references: references)
       end
 
       result.related_locations.try &.each_with_index do |loc, k|
-        validate_location(loc, run, "#{path}.relatedLocations[#{k}]", errors)
+        validate_location(loc, run, "#{path}.relatedLocations[#{k}]", errors, references: references)
       end
 
       result.code_flows.try &.each_with_index do |cf, k|
-        validate_code_flow(cf, run, "#{path}.codeFlows[#{k}]", errors)
+        validate_code_flow(cf, run, "#{path}.codeFlows[#{k}]", errors, references)
       end
 
       result.graphs.try &.each_with_index do |graph, k|
-        validate_graph(graph, run, "#{path}.graphs[#{k}]", errors)
+        validate_graph(graph, run, "#{path}.graphs[#{k}]", errors, references: references)
       end
 
       result.graph_traversals.try &.each_with_index do |gt, k|
@@ -351,7 +399,7 @@ module Sarif
       end
 
       result.stacks.try &.each_with_index do |stack, k|
-        validate_stack(stack, run, "#{path}.stacks[#{k}]", errors)
+        validate_stack(stack, run, "#{path}.stacks[#{k}]", errors, references: references)
       end
 
       result.fixes.try &.each_with_index do |fix, k|
@@ -360,19 +408,20 @@ module Sarif
 
       result.attachments.try &.each_with_index do |attachment, k|
         attachment_path = "#{path}.attachments[#{k}]"
-        validate_message_arguments(attachment.description, "#{attachment_path}.description", errors)
+        validate_message(attachment.description, "#{attachment_path}.description", errors)
         validate_artifact_location(attachment.artifact_location, run, "#{attachment_path}.artifactLocation", errors)
         attachment.regions.try &.each_with_index do |region, i|
           validate_region(region, "#{attachment_path}.regions[#{i}]", errors)
         end
         attachment.rectangles.try &.each_with_index do |rectangle, i|
-          validate_message_arguments(rectangle.message, "#{attachment_path}.rectangles[#{i}].message", errors)
+          validate_message(rectangle.message, "#{attachment_path}.rectangles[#{i}].message", errors)
         end
       end
 
       result.suppressions.try &.each_with_index do |suppression, k|
-        validate_suppression(suppression, run, "#{path}.suppressions[#{k}]", errors)
+        validate_suppression(suppression, run, "#{path}.suppressions[#{k}]", errors, references)
       end
+      references.validate_targets(errors)
 
       if provenance = result.provenance
         validate_result_provenance(provenance, run, "#{path}.provenance", errors)
@@ -541,9 +590,26 @@ module Sarif
     # are checked. §3.11.7 consults a descriptor's messageStrings only for
     # `result.message` and `notification.message`; other messages are checked
     # without an id lookup.
-    private def validate_message_arguments(message : Message?, path : String,
-                                           errors : Array(ValidationError), & : String -> MultiformatMessageString?)
+    private def validate_message(message : Message?, path : String, errors : Array(ValidationError),
+                                 *, label : String = "Message", & : String -> MultiformatMessageString?)
       return unless message
+      if message.text.nil? && message.id.nil?
+        errors << ValidationError.new("#{label} must have either text or id", path)
+      end
+      if message.text.try(&.empty?)
+        errors << ValidationError.new("Message text must not be empty", "#{path}.text")
+      end
+      if message.id.try(&.empty?)
+        errors << ValidationError.new("Message id must not be empty", "#{path}.id")
+      end
+      if markdown = message.markdown
+        if markdown.empty?
+          errors << ValidationError.new("Message markdown must not be empty", "#{path}.markdown")
+        elsif message.text.nil?
+          errors << ValidationError.new("Message markdown requires plain text", "#{path}.markdown")
+        end
+      end
+
       strings = [message.text, message.markdown]
       if (id = message.id) && (looked_up = yield id)
         strings << looked_up.text << looked_up.markdown
@@ -558,11 +624,8 @@ module Sarif
       )
     end
 
-    private def validate_message_arguments(message : Message?, path : String, errors : Array(ValidationError))
-      if message && !message.valid?
-        errors << ValidationError.new("Message must have either text or id", path)
-      end
-      validate_message_arguments(message, path, errors) { nil }
+    private def validate_message(message : Message?, path : String, errors : Array(ValidationError))
+      validate_message(message, path, errors) { nil }
     end
 
     # The highest placeholder index (`{n}`, §3.11.5) in `str`, or nil when it
@@ -597,13 +660,13 @@ module Sarif
     end
 
     private def validate_suppression(suppression : Suppression, run : Run, path : String,
-                                     errors : Array(ValidationError))
+                                     errors : Array(ValidationError), references : ResultLocationReferences)
       validate_enum(suppression.kind, "#{path}.kind", errors)
       validate_enum(suppression.status, "#{path}.status", errors)
       validate_guid(suppression.guid, "#{path}.guid", errors)
 
       if location = suppression.location
-        validate_location(location, run, "#{path}.location", errors)
+        validate_location(location, run, "#{path}.location", errors, references: references)
       end
     end
 
@@ -685,13 +748,7 @@ module Sarif
 
     private def validate_notification(notif : Notification, run : Run, path : String,
                                       errors : Array(ValidationError), *, depth : Int32)
-      if notif.message.text.nil? && notif.message.id.nil?
-        errors << ValidationError.new(
-          "Notification message must have either text or id",
-          "#{path}.message"
-        )
-      end
-      validate_message_arguments(notif.message, "#{path}.message", errors) do |id|
+      validate_message(notif.message, "#{path}.message", errors, label: "Notification message") do |id|
         reference = notif.descriptor
         component_reference = reference.try(&.tool_component)
         component = run.tool_component_for(component_reference)
@@ -725,7 +782,7 @@ module Sarif
 
     private def validate_artifact(artifact : Artifact, run : Run, path : String, artifact_index : Int32,
                                   errors : Array(ValidationError))
-      validate_message_arguments(artifact.description, "#{path}.description", errors)
+      validate_message(artifact.description, "#{path}.description", errors)
       validate_artifact_location(artifact.location, run, "#{path}.location", errors)
       if (length = artifact.length) && length < -1
         errors << ValidationError.new(
@@ -784,8 +841,9 @@ module Sarif
       validate_artifact_location(vcd.mapped_to, run, "#{path}.mappedTo", errors)
     end
 
-    private def validate_code_flow(code_flow : CodeFlow, run : Run, path : String, errors : Array(ValidationError))
-      validate_message_arguments(code_flow.message, "#{path}.message", errors)
+    private def validate_code_flow(code_flow : CodeFlow, run : Run, path : String, errors : Array(ValidationError),
+                                   references : ResultLocationReferences)
+      validate_message(code_flow.message, "#{path}.message", errors)
       if code_flow.thread_flows.empty?
         errors << ValidationError.new(
           "codeFlow must have at least one threadFlow",
@@ -794,7 +852,7 @@ module Sarif
       end
 
       code_flow.thread_flows.each_with_index do |tf, i|
-        validate_message_arguments(tf.message, "#{path}.threadFlows[#{i}].message", errors)
+        validate_message(tf.message, "#{path}.threadFlows[#{i}].message", errors)
         if tf.locations.empty?
           errors << ValidationError.new(
             "threadFlow must have at least one location",
@@ -803,14 +861,25 @@ module Sarif
         end
 
         tf.locations.each_with_index do |tfl, j|
-          validate_thread_flow_location(tfl, run, "#{path}.threadFlows[#{i}].locations[#{j}]", errors)
+          validate_thread_flow_location(tfl, run, "#{path}.threadFlows[#{i}].locations[#{j}]", errors, references: references)
         end
       end
     end
 
     private def validate_thread_flow_location(tfl : ThreadFlowLocation, run : Run, path : String,
-                                              errors : Array(ValidationError))
+                                              errors : Array(ValidationError), *, references : ResultLocationReferences? = nil)
       validate_min(tfl.index, NO_INDEX, "#{path}.index", "index", errors)
+      if references && (index = tfl.index) && index >= 0
+        if cached = run.thread_flow_locations.try(&.[index]?)
+          references.add_cached(index, cached, errors)
+          # An indexed entry gets its locations from the cached object (§3.38.2).
+          references = nil
+        elsif count = reference_count(run.thread_flow_locations, run.external_property_file_references.try(&.thread_flow_locations))
+          validate_index_bound(index, count, "#{path}.index", "threadFlowLocation index", errors)
+        else
+          references.complete = false
+        end
+      end
       validate_min(tfl.nesting_level, 0, "#{path}.nestingLevel", "nestingLevel", errors)
       validate_min(tfl.execution_order, NO_INDEX, "#{path}.executionOrder", "executionOrder", errors)
       validate_enum(tfl.importance, "#{path}.importance", errors)
@@ -819,18 +888,18 @@ module Sarif
       validate_min(tfl.web_request.try(&.index), NO_INDEX, "#{path}.webRequest.index", "index", errors)
       validate_min(tfl.web_response.try(&.index), NO_INDEX, "#{path}.webResponse.index", "index", errors)
       if stack = tfl.stack
-        validate_stack(stack, run, "#{path}.stack", errors)
+        validate_stack(stack, run, "#{path}.stack", errors, references: references)
       end
       tfl.taxa.try &.each_with_index do |taxon, k|
         validate_descriptor_reference(taxon, "#{path}.taxa[#{k}]", errors)
       end
       if location = tfl.location
-        validate_location(location, run, "#{path}.location", errors)
+        validate_location(location, run, "#{path}.location", errors, references: references)
       end
     end
 
     private def validate_fix(fix : Fix, run : Run, path : String, errors : Array(ValidationError))
-      validate_message_arguments(fix.description, "#{path}.description", errors)
+      validate_message(fix.description, "#{path}.description", errors)
       if fix.artifact_changes.empty?
         errors << ValidationError.new(
           "fix must have at least one artifactChange",
@@ -858,13 +927,18 @@ module Sarif
     end
 
     private def validate_location(location : Location, run : Run, path : String,
-                                  errors : Array(ValidationError))
+                                  errors : Array(ValidationError), *, references : ResultLocationReferences? = nil)
       validate_min(location.id, NO_INDEX, "#{path}.id", "location id", errors)
-      validate_message_arguments(location.message, "#{path}.message", errors)
+      references.try &.add(location, path, errors)
+      validate_message(location.message, "#{path}.message", errors)
       location.relationships.try &.each_with_index do |relationship, i|
-        validate_min(relationship.target, 0, "#{path}.relationships[#{i}].target", "target", errors)
-        validate_unique_values(relationship.kinds, "#{path}.relationships[#{i}].kinds", errors)
-        validate_message_arguments(relationship.description, "#{path}.relationships[#{i}].description", errors)
+        relationship_path = "#{path}.relationships[#{i}]"
+        validate_min(relationship.target, 0, "#{relationship_path}.target", "target", errors)
+        if relationship.kinds.try(&.empty?)
+          errors << ValidationError.new("Location relationship kinds must contain at least one value", "#{relationship_path}.kinds")
+        end
+        validate_unique_values(relationship.kinds, "#{relationship_path}.kinds", errors)
+        validate_message(relationship.description, "#{relationship_path}.description", errors)
       end
       if logical_locations = location.logical_locations
         count = reference_count(run.logical_locations, run.external_property_file_references.try(&.logical_locations))
@@ -922,7 +996,7 @@ module Sarif
         validate_min(index, NO_INDEX, "#{path}.index", "index", errors)
         validate_index_bound(index, count, "#{path}.index", "artifact index", errors)
       end
-      validate_message_arguments(location.description, "#{path}.description", errors)
+      validate_message(location.description, "#{path}.description", errors)
     end
 
     private def validate_logical_location(location : LogicalLocation, path : String, errors : Array(ValidationError))
@@ -938,7 +1012,7 @@ module Sarif
 
     private def validate_region(region : Region, path : String,
                                 errors : Array(ValidationError))
-      validate_message_arguments(region.message, "#{path}.message", errors)
+      validate_message(region.message, "#{path}.message", errors)
       # A region SHALL define a text region or a binary region (§3.30.1); the
       # schema requires at least one of startLine, charOffset or byteOffset.
       if region.start_line.nil? && region.char_offset.nil? && region.byte_offset.nil?
@@ -1164,7 +1238,7 @@ module Sarif
 
     private def validate_graph_traversal(gt : GraphTraversal, run : Run, result : Result, path : String,
                                          errors : Array(ValidationError), graph_edge_ids : Hash(Graph, Set(String)))
-      validate_message_arguments(gt.description, "#{path}.description", errors)
+      validate_message(gt.description, "#{path}.description", errors)
       # Exactly one of the two SHALL be present (§3.42.2).
       if gt.run_graph_index.nil? == gt.result_graph_index.nil?
         errors << ValidationError.new(
@@ -1194,7 +1268,7 @@ module Sarif
         end
         traversals.each_with_index do |edge, i|
           edge_path = "#{path}.edgeTraversals[#{i}]"
-          validate_message_arguments(edge.message, "#{edge_path}.message", errors)
+          validate_message(edge.message, "#{edge_path}.message", errors)
           validate_min(edge.step_over_edge_count, 0, "#{edge_path}.stepOverEdgeCount", "stepOverEdgeCount", errors)
           if edge_ids && !edge_ids.includes?(edge.edge_id)
             errors << ValidationError.new("Unknown edgeId '#{edge.edge_id}'", "#{edge_path}.edgeId")
@@ -1204,22 +1278,22 @@ module Sarif
     end
 
     private def validate_stack(stack : Stack, run : Run, path : String,
-                               errors : Array(ValidationError))
-      validate_message_arguments(stack.message, "#{path}.message", errors)
+                               errors : Array(ValidationError), *, references : ResultLocationReferences? = nil)
+      validate_message(stack.message, "#{path}.message", errors)
       stack.frames.each_with_index do |frame, i|
         if location = frame.location
-          validate_location(location, run, "#{path}.frames[#{i}].location", errors)
+          validate_location(location, run, "#{path}.frames[#{i}].location", errors, references: references)
         end
       end
     end
 
     private def validate_graph(graph : Graph, run : Run, path : String,
-                               errors : Array(ValidationError))
-      validate_message_arguments(graph.description, "#{path}.description", errors)
+                               errors : Array(ValidationError), *, references : ResultLocationReferences? = nil)
+      validate_message(graph.description, "#{path}.description", errors)
       node_ids = Set(String).new
       if nodes = graph.nodes
         nodes.each_with_index do |node, i|
-          validate_node(node, run, "#{path}.nodes[#{i}]", node_ids, errors, depth: 1)
+          validate_node(node, run, "#{path}.nodes[#{i}]", node_ids, errors, depth: 1, references: references)
         end
       end
 
@@ -1232,11 +1306,14 @@ module Sarif
     end
 
     private def validate_node(node : Node, run : Run, path : String, seen_ids : Set(String),
-                              errors : Array(ValidationError), *, depth : Int32)
-      validate_message_arguments(node.label, "#{path}.label", errors)
+                              errors : Array(ValidationError), *, depth : Int32, references : ResultLocationReferences?)
+      validate_message(node.label, "#{path}.label", errors)
       # Bound recursion through node.children so a malformed SARIF graph
       # with arbitrarily deep child chains can't blow the call stack.
-      return unless check_depth!(path, depth, errors)
+      unless check_depth!(path, depth, errors)
+        references.try { |refs| refs.complete = false }
+        return
+      end
 
       if node.id.empty?
         errors << ValidationError.new(
@@ -1253,17 +1330,17 @@ module Sarif
       end
 
       if location = node.location
-        validate_location(location, run, "#{path}.location", errors)
+        validate_location(location, run, "#{path}.location", errors, references: references)
       end
 
       node.children.try &.each_with_index do |child, i|
-        validate_node(child, run, "#{path}.children[#{i}]", seen_ids, errors, depth: depth + 1)
+        validate_node(child, run, "#{path}.children[#{i}]", seen_ids, errors, depth: depth + 1, references: references)
       end
     end
 
     private def validate_edge(edge : Edge, path : String, seen_ids : Set(String),
                               node_ids : Set(String), errors : Array(ValidationError))
-      validate_message_arguments(edge.label, "#{path}.label", errors)
+      validate_message(edge.label, "#{path}.label", errors)
       if edge.id.empty?
         errors << ValidationError.new(
           "edge id must not be empty",
