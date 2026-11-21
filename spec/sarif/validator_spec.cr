@@ -1,6 +1,80 @@
 require "../spec_helper"
 
 describe Sarif::Validator do
+  it "rejects empty message fields and Markdown without plain text" do
+    log = Sarif.parse(<<-JSON)
+      {"version":"2.1.0","runs":[{"tool":{"driver":{"name":"T"}},
+        "invocations":[{"executionSuccessful":true,"toolExecutionNotifications":[{"message":{"id":"","text":"notification"}}]}],
+        "results":[{"message":{"id":"r","markdown":"**result**"},
+          "locations":[{"message":{"text":"location","markdown":""}}]},
+          {"message":{"id":"r","text":""}}, {"message":{"text":"plain","markdown":"**rich**"}}]}]}
+      JSON
+    Sarif::Validator.new.validate(log).errors.map(&.path).should eq([
+      "$.runs[0].results[0].message.markdown",
+      "$.runs[0].results[0].locations[0].message.markdown",
+      "$.runs[0].results[1].message.text",
+      "$.runs[0].invocations[0].toolExecutionNotifications[0].message.id",
+    ])
+  end
+
+  it "validates relationship targets and unique location IDs within each result" do
+    log = Sarif.parse(<<-JSON)
+      {"version":"2.1.0","runs":[{"tool":{"driver":{"name":"T"}},"results":[{
+        "message":{"text":"first"},"locations":[{"id":0,"relationships":[{"target":3},
+          {"target":4,"kinds":[]},{"target":0}]}],"relatedLocations":[{"id":1}],
+        "codeFlows":[{"threadFlows":[{"locations":[{"stack":{"frames":[{"location":{"id":1}}]}}]}]}],
+        "graphs":[{"nodes":[{"id":"parent","children":[{"id":"child","location":{"id":3}}]}]}]
+      },{"message":{"text":"second"},"locations":[{"id":0},{"id":4}]}]}]}
+      JSON
+    prefix = "$.runs[0].results[0]"
+    Sarif::Validator.new.validate(log).errors.map(&.path).sort.should eq([
+      "#{prefix}.codeFlows[0].threadFlows[0].locations[0].stack.frames[0].location.id",
+      "#{prefix}.locations[0].relationships[1].kinds",
+      "#{prefix}.locations[0].relationships[1].target",
+      "#{prefix}.locations[0].relationships[2].target",
+    ])
+  end
+
+  it "resolves relationship targets in a shared thread flow location and its stack" do
+    json = <<-JSON
+      {"version":"2.1.0","runs":[{"tool":{"driver":{"name":"T"}},
+        "threadFlowLocations":[{"location":{"id":2,"relationships":[{"target":0}]},"stack":{"frames":[{"location":{"id":3}}]}}],
+        "results":[{"message":{"text":"m"},"locations":[{"id":0,"relationships":[{"target":2},{"target":3}]}],
+          "codeFlows":[{"threadFlows":[{"locations":[{"index":0},{"index":0}]}]}]}]}]}
+      JSON
+    Sarif.parse!(json)
+    log = Sarif.parse(json.sub(%({"target":0}), %({"target":9})))
+    Sarif::Validator.new.validate(log).errors.map(&.path).should eq([
+      "$.runs[0].threadFlowLocations[0].location.relationships[0].target",
+    ])
+  end
+
+  it "defers relationship targets only while their external location cache is unresolved" do
+    json = <<-JSON
+      {"version":"2.1.0","inlineExternalProperties":[{"threadFlowLocations":[{"location":{"id":1}}]}],
+        "runs":[{"tool":{"driver":{"name":"T"}},"externalPropertyFileReferences":{"threadFlowLocations":[
+          {"location":{"uri":"sarif:/inlineExternalProperties/0"}}]},
+          "results":[{"message":{"text":"m"},"locations":[{"relationships":[{"target":9}]}],
+            "codeFlows":[{"threadFlows":[{"locations":[{"index":0}]}]}]}]}]}
+      JSON
+    log = Sarif.parse!(json)
+    Sarif::Validator.new.validate(log.resolve_external_properties).errors.map(&.path).should eq([
+      "$.runs[0].results[0].locations[0].relationships[0].target",
+    ])
+    resolved = Sarif.parse!(json.sub(%({"target":9}), %({"target":1}))).resolve_external_properties
+    Sarif::Validator.new.validate(resolved).valid?.should be_true
+  end
+
+  it "rejects a thread flow location index outside the run cache" do
+    log = Sarif.parse(<<-JSON)
+      {"version":"2.1.0","runs":[{"tool":{"driver":{"name":"T"}},"threadFlowLocations":[{}],
+        "results":[{"message":{"text":"m"},"codeFlows":[{"threadFlows":[{"locations":[{"index":1},{"index":-1}]}]}]}]}]}
+      JSON
+    Sarif::Validator.new.validate(log).errors.map(&.path).should eq([
+      "$.runs[0].results[0].codeFlows[0].threadFlows[0].locations[0].index",
+    ])
+  end
+
   it "reports dangling indexes when the run arrays are absent or empty" do
     ["", %(,"artifacts":[],"logicalLocations":[],"invocations":[])].each do |arrays|
       json = <<-JSON
@@ -2369,7 +2443,7 @@ describe Sarif::Validator do
         "$.runs[0].results[0].codeFlows[0].threadFlows[0].locations[0].executionOrder",
         "$.runs[0].threadFlowLocations[0].nestingLevel",
       ])
-      ok = %({"message": {"text": "m"}, "locations": [{"id": -1, "relationships": [{"target": 0}]}]})
+      ok = %({"message": {"text": "m"}, "locations": [{"id": -1, "relationships": [{"target": 0}]}], "relatedLocations": [{"id": 0}]})
       validate.call(ok, "").should be_empty
     end
 

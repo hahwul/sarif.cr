@@ -18,6 +18,8 @@
 
 ### Fixed
 
+- Message validation rejects empty strings and Markdown without plain text (§3.11.8–§3.11.10).
+- Location IDs must be unique within a result, and location relationships must target a different location in the same result. Validation checks thread flow indexes and includes cached locations and stack frames in the result's location lookup (§3.28.2, §3.34, §3.38.2).
 - Runs can omit the inline driver when `externalPropertyFileReferences.driver` supplies it. Rule lookup validation uses external tool metadata after resolution (§3.15.3, §3.52.3).
 - An artifact part can refer to its file by an index introduced by an earlier external artifact part (§3.4.5, §3.15.2).
 - `Validator` reports an unresolved result rule GUID and validates the rule ID against the descriptor found by GUID (§3.52.4, §3.52.6).

@@ -57,5 +57,13 @@ describe Sarif::Message do
     it "returns false when neither text nor id is present" do
       Sarif::Message.new.valid?.should be_false
     end
+
+    it "requires nonempty strings and plain text for Markdown" do
+      Sarif::Message.new(text: "").valid?.should be_false
+      Sarif::Message.new(text: "Hello", id: "").valid?.should be_false
+      Sarif::Message.new(text: "Hello", markdown: "").valid?.should be_false
+      Sarif::Message.new(id: "msg1", markdown: "**Hello**").valid?.should be_false
+      Sarif::Message.new(text: "Hello", markdown: "**Hello**").valid?.should be_true
+    end
   end
 end
